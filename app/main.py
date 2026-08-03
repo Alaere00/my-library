@@ -1,11 +1,9 @@
 import http
-from typing import Union
-from app.schemas.book import Book, BookInfo
+from app.schemas.book_model import Book, BookInfo, BookDetails
 from fastapi import FastAPI, HTTPException
 import requests
 from app.config import settings
-from app.services.google_books import parse_volume
-
+from app.services.google_books import parse_volume, get_books_by_isbn, get_books_by_author
 
 # MVP
 # store books in some sort of database -> google firebase/firestore (I believe it's free)
@@ -16,7 +14,8 @@ from app.services.google_books import parse_volume
 # generate recommendation from user reading history 
 app = FastAPI()
 
-Google_BOOKS_API_URL = "https://www.googleapis.com"
+GOOGLE_BOOKS_API_URL = "https://www.googleapis.com/books/v1/volumes"
+
 
 @app.get("/")
 def read_root():
@@ -24,20 +23,12 @@ def read_root():
 
 @app.get("/search")
 def search_books(query: str):
-    # Implement your search logic here
-    # result = requests.get(f"https://www.googleapis.com/books/v1/volumes?q={query}&key={settings.google_books_api_key}")
+    pass
     
-    return {"message": f"Searching books for query: {query}"}
-
-
-
-# @app.get("/book/{book_id}", response_model=Union[Book, BookInfo])
-# async def get_book_data():
-#     response = requests.get(f"{Google_BOOKS_API_URL}/books/v1/volumes/{book_id}?key={settings.google_books_api_key}")
 
 @app.get("/book/{book_title}", response_model=list[Book] | None)
 def get_book_by_title(book_title: str):
-    response = requests.get(f"{Google_BOOKS_API_URL}/books/v1/volumes?q={book_title}&key={settings.google_books_api_key}")
+    response = requests.get(f"{GOOGLE_BOOKS_API_URL}?q={book_title}", params={ "key": settings.google_books_api_key})
 
     if response.status_code == http.HTTPStatus.OK:
         data = response.json()
@@ -48,37 +39,42 @@ def get_book_by_title(book_title: str):
     
 
 
-
-@app.get("/book/{author_name}", response_model=list[Book] | None)
+@app.get("/book/author/{author_name}")
+# title, publication, book cover, format/edition 
 def list_books_by_author(author_name: str):
-    # response = requests.get(f"https://openlibrary.org/search/authors.json?q={author_name}")
+    params = {
+        "q": f"inauthor:{author_name}",
+        "key": settings.google_books_api_key
+    }
 
-    for author in response.json().get("docs", []):
-        author_key = author.get("key")
-        if author_key:
-            works_response = requests.get(f"https://openlibrary.org{author_key}/works.json")
-            if works_response.status_code == http.HTTPStatus.OK:
-                works_data = works_response.json()
-                books = []
-                for work in works_data.get("entries", []):
-                    book = {
-                        "title": work.get("title"),
-                    }
-                    books.append(book)
-                return books
+    response = requests.get(f"{GOOGLE_BOOKS_API_URL}", params=params).json()
 
-    # return response.json()
+    author_books = get_books_by_author(response.get('items'), author_name)
+
+    return author_books
 
 
-app.get("/book/{book_id}/info", response_model=BookInfo | None)
-def get_book_info_by_id(book_id: str):
-    pass
+@app.get("/book/{isbn}/info")
+def get_book_info_by_id(isbn: str):
+    params = {
+    "key": settings.google_books_api_key
+}
+    response = requests.get(f"{GOOGLE_BOOKS_API_URL}?q=isbn: {isbn}&country=US", params=params)
+    data = response.json()
+
+    book_by_isbn = get_books_by_isbn(data.get('items', {}), isbn)
+
+    return book_by_isbn
+
+
+
+
 
     # API Endpoints:
     # Search books by title, author, or category -> needs to be in a separate file related to the search functionality
-    # 1 get book by title
-    # 3 get book info by id
-    # 4 get book by Author
+    # 1 get book by title (done)
+    # 2 get book info by isbn (done)
+    # 3 get book by Author (done)
 
 
     # Personal Library Endpoints:
