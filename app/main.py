@@ -1,19 +1,22 @@
 import http
-from app.schemas.book_model import Book, BookInfo, BookDetails
+import httpx
+from app.schemas.book_model import BookResponse, Author
 from fastapi import FastAPI, HTTPException
 import requests
-from app.config import settings
-from app.services.google_books import parse_volume, get_books_by_isbn, get_books_by_author
+from app.settings import settings
+from app.services.google_books import get_title_details, get_books_by_isbn, get_titles_by_author
 from fastapi.middleware.cors import CORSMiddleware
+from app.dbs.supabase_db import user_sign_up
+
 
 origins = [
-    "http://localhost:5173",  # Common Vite local port
+    "http://localhost:5173",
     "http://127.0.0.1:5173",
 ]
 
 
 app = FastAPI()
-GOOGLE_BOOKS_API_URL = "https://www.googleapis.com/books/v1/volumes"
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -24,56 +27,81 @@ app.add_middleware(
 )
 
 
-
 @app.get("/healthz")
 def read_root():
     return {"message": "Hello World"}
 
 @app.get("/search")
-def search_books(query: str):
-    pass
+def universal_search(query: str):
+    combined_results = []
+
+    validated_isbn = len(query.strip('-')) in (10, 13)
+    # need to validate the value, because a random string could easily be 10 or 13 characters long 
+
+    if validated_isbn:
+        return get_book_info_by_isbn(query)
+
+    else:
+        title_by_author = list_books_by_author(query)
+        print(type(title_by_author))
+        title_details = get_title(query)
+        print(type(title_details))
+
+        combined_results.append(zip(title_by_author, title_details))
 
 
-@app.get("/book/{book_title}", response_model=list[Book] | None)
-def get_book_by_title(book_title: str):
-    response = requests.get(f"{GOOGLE_BOOKS_API_URL}?q={book_title}", params={ "key": settings.google_books_api_key})
+    return combined_results
 
+
+# @app.get("/book/{title}")
+def get_title(title: str):
+    response = requests.get(f"{settings.google_books_api_url}?q=intitle:{title}", params={ "key": settings.google_books_api_key})
     if response.status_code == http.HTTPStatus.OK:
         data = response.json()
-        books = [parse_volume(item) for item in data.get("items", [])]
-        return books
+
+        title_details = get_title_details(data)
+        return title_details
 
     raise HTTPException(status_code=response.status_code, detail="Failed to fetch book data")
     
 
 
-@app.get("/book/author/{author_name}")
-# title, publication, book cover, format/edition 
-def list_books_by_author(author_name: str):
-    params = {
-        "q": f"inauthor:{author_name}",
-        "key": settings.google_books_api_key
+# @app.get("/author/{author_name}")
+async def list_books_by_author(author_name: str) -> Author:
+    url = f"https://openlibrary.org/search.json?author={author_name}&fields=title"
+
+    headers = {
+        "User-Agent": settings.user_agent
     }
 
-    response = requests.get(f"{GOOGLE_BOOKS_API_URL}", params=params).json()
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(url, headers=headers)
+        data = resp.json()
 
-    author_books = get_books_by_author(response.get('items'), author_name)
+    author_titles = get_titles_by_author(data)
+    
+    return author_titles
 
-    return author_books
 
 
 @app.get("/book/{isbn}/info")
-def get_book_info_by_id(isbn: str):
+def get_book_info_by_isbn(isbn: str):
     params = {
     "key": settings.google_books_api_key
 }
-    response = requests.get(f"{GOOGLE_BOOKS_API_URL}?q=isbn: {isbn}&country=US", params=params)
+    response = requests.get(f"{settings.google_books_api_url}?q=isbn:{isbn}", params=params)
     data = response.json()
 
-    book_by_isbn = get_books_by_isbn(data.get('items', {}), isbn)
+    book_by_isbn = get_books_by_isbn(data.get('items', []), isbn)
 
     return book_by_isbn
 
+
+@app.post('/sign_up/{email}/{password}')
+async def create_new_user(email: str, password: str):
+    new_user = await user_sign_up(email, password)
+
+    return new_user
 
 
 @app.post("/my-shelf/{book_name}")

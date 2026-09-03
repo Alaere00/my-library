@@ -1,8 +1,13 @@
 from pydantic_settings import BaseSettings
+from typing import Optional
 
 
 class Settings(BaseSettings):
-    google_books_api_key: str = ""
+    google_books_api_key: Optional[str] = None
+    google_books_api_url: str = ""
+    supabase_api_key: Optional[str] = None
+    supabase_url: Optional[str] = None
+    user_agent: Optional[str] = None
     embedding_model: str = "all-MiniLM-L6-v2"
     top_k: int = 10
 
