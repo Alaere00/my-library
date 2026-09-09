@@ -1,5 +1,5 @@
 from app.schemas.book_model import BookDetails, BookResponse, Author, Docs
-
+from pydantic_extra_types.isbn import ISBN
 
 def get_title_details(api_resp: dict) -> BookResponse:
     book_list = api_resp.get("items", [])
@@ -33,13 +33,6 @@ def get_books_by_isbn(api_response: BookResponse, isbn: str):
                 book_details.append(book_info['volumeInfo'])
 
     return book_details
-
-# def isbn_validator(isbn: str):
-
-#     if len(isbn.strip('-')) != 10 or len(isbn.strip('-')):
-#         return False
-
-#     return 
 
 
 def get_titles_by_author(item) -> Author:

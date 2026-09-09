@@ -7,6 +7,8 @@ from app.settings import settings
 from app.services.google_books import get_title_details, get_books_by_isbn, get_titles_by_author
 from fastapi.middleware.cors import CORSMiddleware
 from app.dbs.supabase_db import user_sign_up
+import isbnlib 
+
 
 
 origins = [
@@ -31,30 +33,31 @@ app.add_middleware(
 def read_root():
     return {"message": "Hello World"}
 
-@app.get("/search")
-def universal_search(query: str):
-    combined_results = []
+@app.get("/search", response_model=list[Author| BookResponse])
+async def universal_search(query: str):
+    combined_results: list[Author | BookResponse] = []
 
-    validated_isbn = len(query.strip('-')) in (10, 13)
-    # need to validate the value, because a random string could easily be 10 or 13 characters long 
-
+    validated_isbn = isbnlib.canonical(query)
+ 
     if validated_isbn:
         return get_book_info_by_isbn(query)
+    
 
-    else:
-        title_by_author = list_books_by_author(query)
-        print(type(title_by_author))
-        title_details = get_title(query)
-        print(type(title_details))
+    title_by_author = await list_books_by_author(query)
+    title_details = await get_title(query)
 
-        combined_results.append(zip(title_by_author, title_details))
+        # combined_results.append(title_by_author)
+        # combined_results.append(title_details)
+
+# <class 'app.schemas.book_model.Author'>
+# <class 'app.schemas.book_model.BookResponse'>
 
 
     return combined_results
 
 
 # @app.get("/book/{title}")
-def get_title(title: str):
+async def get_title(title: str):
     response = requests.get(f"{settings.google_books_api_url}?q=intitle:{title}", params={ "key": settings.google_books_api_key})
     if response.status_code == http.HTTPStatus.OK:
         data = response.json()
