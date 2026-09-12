@@ -1,14 +1,14 @@
 import http
 import httpx
-from app.schemas.book_model import BookResponse, Author
-from fastapi import FastAPI, HTTPException
+from app.schemas.book_model import TitleResponse
+from fastapi import FastAPI, HTTPException, Depends, Header
 import requests
 from app.settings import settings
-from app.services.google_books import get_title_details, get_books_by_isbn, get_titles_by_author
+from app.services.google_books import get_books_by_isbn
+from app.schemas.auth_model import UserProfile
 from fastapi.middleware.cors import CORSMiddleware
-from app.dbs.supabase_db import user_sign_up
+from app.dbs.supabase_db import user_sign_up, create_user_profile, get_current_user_id
 import isbnlib 
-
 
 
 origins = [
@@ -19,7 +19,6 @@ origins = [
 
 app = FastAPI()
 
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,            # Allows specific origins
@@ -28,70 +27,41 @@ app.add_middleware(
     allow_headers=["*"],              # Allows all headers
 )
 
+params = {"key": settings.google_books_api_key}
 
 @app.get("/healthz")
 def read_root():
     return {"message": "Hello World"}
 
-@app.get("/search", response_model=list[Author| BookResponse])
+@app.get("/search")
 async def universal_search(query: str):
-    combined_results: list[Author | BookResponse] = []
-
     validated_isbn = isbnlib.canonical(query)
  
     if validated_isbn:
         return get_book_info_by_isbn(query)
-    
+    else: 
+        title_details = await get_title_by_name_or_author(query)
 
-    title_by_author = await list_books_by_author(query)
-    title_details = await get_title(query)
+    return title_details
 
-        # combined_results.append(title_by_author)
-        # combined_results.append(title_details)
-
-# <class 'app.schemas.book_model.Author'>
-# <class 'app.schemas.book_model.BookResponse'>
-
-
-    return combined_results
-
-
-# @app.get("/book/{title}")
-async def get_title(title: str):
-    response = requests.get(f"{settings.google_books_api_url}?q=intitle:{title}", params={ "key": settings.google_books_api_key})
-    if response.status_code == http.HTTPStatus.OK:
-        data = response.json()
-
-        title_details = get_title_details(data)
-        return title_details
-
-    raise HTTPException(status_code=response.status_code, detail="Failed to fetch book data")
-    
-
-
-# @app.get("/author/{author_name}")
-async def list_books_by_author(author_name: str) -> Author:
-    url = f"https://openlibrary.org/search.json?author={author_name}&fields=title"
-
-    headers = {
-        "User-Agent": settings.user_agent
-    }
-
+# title or author -> combined into one for simplicity 
+async def get_title_by_name_or_author(query: str):
+    url = settings.google_books_api_url
+    q_params = {"q": f':"{query}"+OR+inauthor:"{query}"', "key": params["key"], "orderBy": "relevance",   }
+  
     async with httpx.AsyncClient() as client:
-        resp = await client.get(url, headers=headers)
-        data = resp.json()
+        resp = await client.get(url, params=q_params)
+        data = TitleResponse(**resp.json())
 
-    author_titles = get_titles_by_author(data)
+
+    if not data:
+        return []
+    else:
+        return data
+
     
-    return author_titles
-
-
-
-@app.get("/book/{isbn}/info")
+# @app.get("/book/{isbn}/info")
 def get_book_info_by_isbn(isbn: str):
-    params = {
-    "key": settings.google_books_api_key
-}
     response = requests.get(f"{settings.google_books_api_url}?q=isbn:{isbn}", params=params)
     data = response.json()
 
@@ -106,26 +76,45 @@ async def create_new_user(email: str, password: str):
 
     return new_user
 
+@app.post('/update_profiles')
+async def update_user_profile(update_data: UserProfile, user_id: str = Depends(get_current_user_id),
+                              authorization=Header(None)
+                              ):
+    try:
+        update = await create_user_profile(user_id=user_id,
+                                           first_name=update_data.first_name,
+                                           last_name=update_data.last_name,   
+                                  )
+        return update
 
-@app.post("/my-shelf/{book_name}")
-def save_book_by_title(book_name):
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=e)
+
+
+
+@app.post("/my_shelf/completed/{title}")
+def add_read_title_to_shelf(title: str):
     pass
-    # API Endpoints:
-    # Search books by title, author, or category -> needs to be in a separate file related to the search functionality
-    # 1 get book by title (done)
-    # 2 get book info by isbn (done)
-    # 3 get book by Author (done)
 
 
-    # Personal Library Endpoints:
-    # My bookshelf 
-    # Favotrite books
-    # Read this year
-    # To be read
+@app.post("/my-shelf/favorite/{title}")
+def add_title_to_favorites(title: str):
+    pass
 
-    # Add books to personal library
-    # Remove books from personal library
-    # Mark favorites 
+
+@app.post("/my-shelf/tbr/{title}")
+def add_title_to_tbr(title):
+    pass
+
+
+@app.delete("my-shelf/TEMP/{title}")
+def remove_title_from_shelf(shelf_type, title):
+    pass
+    # in the database correlate the shelf type and remove the title 
+
+# database for bookshelf 
+
+
 
     # Share books with friends?
     # Share reading history with friends?

@@ -2,28 +2,10 @@ from typing import List, Dict, Optional, Any
 from pydantic import BaseModel
 
 
-class IndustryIdentifier(BaseModel):
+class IndustryIdentifiers(BaseModel):
     type: str
     identifier: str
 
-# class Docs(BaseModel):
-#     author_key: list[str] = ""
-#     author_name: list[str] = ""
-#     cover_edition_key: Optional[str] = None
-#     cover_i: Optional[int] = None
-#     edition_count: int = None
-#     first_publish_year: int = None
-#     has_full_text: Optional[bool] = None
-#     key: Optional[str] = None
-#     language: Optional[list[str]] = None
-#     title: str
-
-class Docs(BaseModel):
-    title: str
-    author_key: list[str] = []
-    author_name: list[str] = []
-    edition_count: int = None
-    first_publish_year: str = None
 
 
 class BookDetails(BaseModel): 
@@ -44,11 +26,7 @@ class BookDetails(BaseModel):
     publishedDate: Optional[str] = None
     industryIdentifiers: List[Dict[str, str]] = None
 
-class Author(BaseModel):
-    numFound: int
-    numFoundExact: Optional[bool]
-    offset: Optional[int] = None
-    docs: list[Docs]
+
 
 class BookResponse(BaseModel):
     totalItems: Optional[int] = None
@@ -64,7 +42,38 @@ class RecommendationRequest(BaseModel):
 #     source: Book
 #     recommendations: list[Book]
 
+class ImageLinks(BaseModel):
+    smallThumbnail: Optional[str] = None
+    thumbnail: Optional[str] = None
 
 
+class VolumeInfo(BaseModel):
+    title: str
+    authors: Optional[list[str]] = None
+    publisher: Optional[str] = None
+    publishedDate: Optional[str] = None
+    description: Optional[str] = None
+    # industryIdentifiers: Optional[List[IndustryIdentifiers]] = None
+    industryIdentifiers: List[Dict[str, str]] = None
+    pageCount: Optional[int] = None
+    printType: Optional[str] = None
+    mainCategory: Optional[str] = None
+    averageRating: Optional[int] = None
+    ratingsCount: Optional[int] = None
+    imageLinks: Optional[ImageLinks] = None
+    language: Optional[str] = None
+    infoLink: Optional[str] = None
+
+class ItemsResp(BaseModel):
+    kind: str
+    id: str
+    etag: str
+    selfLink: str
+    volumeInfo: VolumeInfo
 
 
+ 
+class TitleResponse(BaseModel):
+    kind: str
+    totalItems: int
+    items: Optional[List[ItemsResp]] = None

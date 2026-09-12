@@ -1,4 +1,4 @@
-from app.schemas.book_model import BookDetails, BookResponse, Author, Docs
+from app.schemas.book_model import BookDetails, BookResponse
 from pydantic_extra_types.isbn import ISBN
 
 def get_title_details(api_resp: dict) -> BookResponse:
@@ -35,15 +35,3 @@ def get_books_by_isbn(api_response: BookResponse, isbn: str):
     return book_details
 
 
-def get_titles_by_author(item) -> Author:
-    return Author(
-        numFound=item.get("numFound", 0),
-        numFoundExact=item.get('numFoundExact'),
-        num_found=item.get('num_found', 0),
-        offset=item.get("offset", 0),
-        docs=[Docs(**docs) for docs in item.get('docs', [])]
-    )
-
-
-
-# fetching covers https://covers.openlibrary.org/a/olid/OL23919A-M.jpg
