@@ -58,7 +58,7 @@ class VolumeInfo(BaseModel):
     pageCount: Optional[int] = None
     printType: Optional[str] = None
     mainCategory: Optional[str] = None
-    averageRating: Optional[int] = None
+    averageRating: Optional[int | float] = None
     ratingsCount: Optional[int] = None
     imageLinks: Optional[ImageLinks] = None
     language: Optional[str] = None
