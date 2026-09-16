@@ -1,10 +1,11 @@
 import http
+from typing import List
 import httpx
-from app.schemas.book_model import TitleResponse
+from app.schemas.book_model import TitleResponse, VolumeInfo
 from fastapi import FastAPI, HTTPException, Depends, Header
 import requests
 from app.settings import settings
-from app.services.google_books import get_books_by_isbn
+# from app.services.google_books import get_books_by_isbn
 from app.schemas.auth_model import UserProfile
 from fastapi.middleware.cors import CORSMiddleware
 from app.dbs.supabase_db import user_sign_up, create_user_profile, get_current_user_id
@@ -33,21 +34,25 @@ params = {"key": settings.google_books_api_key}
 def read_root():
     return {"message": "Hello World"}
 
-@app.get("/search")
-async def universal_search(query: str):
+@app.get("/search/{query}")
+async def universal_search(query: str, page: int = 1, per_page: int = 10):
     validated_isbn = isbnlib.canonical(query)
  
     if validated_isbn:
         return get_book_info_by_isbn(query)
     else: 
-        title_details = await get_title_by_name_or_author(query)
+        title_details = await get_title_by_name_or_author(query, page, per_page)
 
     return title_details
 
-# title or author -> combined into one for simplicity 
-async def get_title_by_name_or_author(query: str):
+# title or author -> universal search
+async def get_title_by_name_or_author(query: str, page: int = 1, per_page: int = 10):
+    max_results = min(per_page,  40)
+
+    start_index = (page - 1) * max_results
+
     url = settings.google_books_api_url
-    q_params = {"q": f':"{query}"+OR+inauthor:"{query}"', "key": params["key"], "orderBy": "relevance",   }
+    q_params = {"q": f':"{query}"+OR+inauthor:"{query}&printType=books&projection=full"', "key": settings.google_books_api_key, "startIndex": start_index, "maxResult": per_page }
   
     async with httpx.AsyncClient() as client:
         resp = await client.get(url, params=q_params)
@@ -59,15 +64,19 @@ async def get_title_by_name_or_author(query: str):
     else:
         return data
 
-    
-# @app.get("/book/{isbn}/info")
-def get_book_info_by_isbn(isbn: str):
+
+@app.get("/book/{isbn}/info")
+# debating adding total found titles
+def get_book_info_by_isbn(isbn: str, page: int = 1, limit: int = 10) -> List[VolumeInfo]:
+    max_results = min(limit, 40)
+    start_index = (page - 1) * max_results
+    params = {"key": settings.google_books_api_key, "startIndex": start_index, "maxResult": max_results}
     response = requests.get(f"{settings.google_books_api_url}?q=isbn:{isbn}", params=params)
-    data = response.json()
+    data = TitleResponse(**response.json())
 
-    book_by_isbn = get_books_by_isbn(data.get('items', []), isbn)
+    volume_info = [info.volumeInfo for info in data.items]
 
-    return book_by_isbn
+    return volume_info
 
 
 @app.post('/sign_up/{email}/{password}')
@@ -112,7 +121,7 @@ def remove_title_from_shelf(shelf_type, title):
     pass
     # in the database correlate the shelf type and remove the title 
 
-# database for bookshelf 
+    # database for bookshelf 
 
 
 
