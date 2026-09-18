@@ -34,14 +34,14 @@ params = {"key": settings.google_books_api_key}
 def read_root():
     return {"message": "Hello World"}
 
-@app.get("/search/{query}")
-async def universal_search(query: str, page: int = 1, per_page: int = 10):
-    validated_isbn = isbnlib.canonical(query)
+@app.get("/search")
+async def universal_search(q: str, page: int = 1, per_page: int = 10):
+    validated_isbn = isbnlib.canonical(q)
  
     if validated_isbn:
-        return get_book_info_by_isbn(query)
+        return get_book_info_by_isbn(q)
     else: 
-        title_details = await get_title_by_name_or_author(query, page, per_page)
+        title_details = await get_title_by_name_or_author(q, page, per_page)
 
     return title_details
 
@@ -51,11 +51,21 @@ async def get_title_by_name_or_author(query: str, page: int = 1, per_page: int =
 
     start_index = (page - 1) * max_results
 
+    params = {
+        "q": f':"{query}"+OR+inauthor:"{query}"',
+        "key": settings.google_books_api_key,
+        "printType": "books",
+        "projection": "full",
+        "startIndex": start_index,
+        "maxResults": per_page
+
+    }
+
     url = settings.google_books_api_url
-    q_params = {"q": f':"{query}"+OR+inauthor:"{query}&printType=books&projection=full"', "key": settings.google_books_api_key, "startIndex": start_index, "maxResult": per_page }
-  
+ 
     async with httpx.AsyncClient() as client:
-        resp = await client.get(url, params=q_params)
+        resp = await client.get(url, params=params)
+        resp.raise_for_status()
         data = TitleResponse(**resp.json())
 
 
