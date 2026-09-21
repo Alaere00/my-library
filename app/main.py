@@ -1,8 +1,8 @@
-from typing import List
+from typing import List, Optional
 import httpx
-from app.schemas.book_model import TitleResponse, VolumeInfo, AuthorResp, Docs
-from fastapi import FastAPI, HTTPException, Depends, Header
 import requests
+from fastapi import FastAPI, HTTPException, Depends, Header, Query, status
+from app.schemas.book_model import TitleResponse, VolumeInfo, BookResp, Docs
 from app.settings import settings
 from app.schemas.auth_model import UserProfile
 from fastapi.middleware.cors import CORSMiddleware
@@ -45,7 +45,6 @@ async def universal_search(q: str, page: int = 1, per_page: int = 10):
 # title or author -> universal search
 async def get_title_by_name_or_author(query: str, page: int = 1, per_page: int = 10):
     max_results = min(per_page,  40)
-
     start_index = (page - 1) * max_results
 
     params = {
@@ -55,12 +54,11 @@ async def get_title_by_name_or_author(query: str, page: int = 1, per_page: int =
         "projection": "full",
         "startIndex": start_index,
         "maxResults": per_page
-
     }
 
     url = settings.google_books_api_url
  
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=5.0) as client:
         resp = await client.get(url, params=params)
         resp.raise_for_status()
         data = TitleResponse(**resp.json())
@@ -72,7 +70,7 @@ async def get_title_by_name_or_author(query: str, page: int = 1, per_page: int =
         return data
 
 
-@app.get("/search/{isbn}/info")
+@app.get("/books/{isbn}")
 def get_book_info_by_isbn(isbn: str, page: int = 1, limit: int = 10) -> List[VolumeInfo]:
     max_results = min(limit, 40)
     start_index = (page - 1) * max_results
@@ -88,37 +86,45 @@ def get_book_info_by_isbn(isbn: str, page: int = 1, limit: int = 10) -> List[Vol
 
     return volume_info
 
-@app.get("/search/title-info")
-def get_book_info_by_title(query: str):
-    pass
 
+@app.get("/books", response_model=BookResp)
+async def get_book_info_by_author(author_name: Optional[str] = Query(None, description="Search by author name"), book_title: Optional[str] = Query(None, description="Search by book title")):
+    url = f"https://openlibrary.org/search.json"
 
-
-@app.get("/search/by-author/{author_name}")
-def get_book_info_by_author(author_name: str):
-    url = f"https://openlibrary.org/search.json?author={author_name}"
-    response = requests.get(url=url, timeout=5)
-    response.raise_for_status()
-
-    if response.ok:
-        try:
-            data = {**response.json(), "docs": [Docs(**items) for items in response.json()["docs"]]}
-
-            author_resp = AuthorResp(**data)
-
-        except ValueError as e:
-            print("Response error", response.text)
-
-
-    return author_resp
-
+    if not author_name and not book_title:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Must provide a book title or author name"
+        )
     
+    params = {} 
+    if author_name:
+        params["author"] = author_name
+    if book_title:
+        params["title"] = book_title
 
+    async with httpx.AsyncClient(timeout=5.0) as client:
+        try:
+            response = await client.get(url, params=params)
+            response.raise_for_status()
+
+        except httpx.RequestError:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Open library API is unavailable")
+
+    try:
+        data = {**response.json(), "docs": [Docs(**items) for items in response.json()["docs"]]}
+        author_resp = BookResp(**data)
+        return author_resp
+
+    except (ValueError, KeyError, TypeError) as e:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f'{str(e)}')
+    
+    
 @app.post('/sign_up/{email}/{password}')
 async def create_new_user(email: str, password: str):
     new_user = await user_sign_up(email, password)
 
     return new_user
+
 
 @app.post('/update_profiles')
 async def update_user_profile(update_data: UserProfile, user_id: str = Depends(get_current_user_id),
@@ -133,8 +139,7 @@ async def update_user_profile(update_data: UserProfile, user_id: str = Depends(g
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=e)
-
-
+    
 
 @app.post("/my_shelf/completed/{title}")
 def add_read_title_to_shelf(title: str):

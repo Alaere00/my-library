@@ -84,7 +84,7 @@ class Docs(BaseModel):
     # _version_: Optional[int] = None
 
 
-class AuthorResp(BaseModel):
+class BookResp(BaseModel):
     numFound: int
     start: int
     numFoundExact: bool
