@@ -1,36 +1,10 @@
 from typing import List, Dict, Optional, Any
-from pydantic import BaseModel
+from pydantic import BaseModel, computed_field
 
 
 class IndustryIdentifiers(BaseModel):
     type: str
     identifier: str
-
-
-class BookDetails(BaseModel): 
-    id: Optional[str] = None
-    kind: Optional[str] = None
-    title: str
-    subtitle: Optional[str] = None
-    authors: Optional[list[str]] = []
-    description: Optional[str] = None
-    categories: Optional[list[str]] = None
-    pageCount: Optional[int] = None
-    printType: Optional[str] = None
-    # averageRating: Optional[float] = None
-    # ratingsCount: Optional[int] = None
-    maturityRating: Optional[str] = None
-    imageLinks: Optional[Any] = None
-    publisher: Optional[str] = None
-    publishedDate: Optional[str] = None
-    industryIdentifiers: List[Dict[str, str]] = None
-
-
-
-class BookResponse(BaseModel):
-    totalItems: Optional[int] = None
-    items: Optional[List[BookDetails]] = []
-
 
 
 class RecommendationRequest(BaseModel):
@@ -63,6 +37,7 @@ class VolumeInfo(BaseModel):
     language: Optional[str] = None
     infoLink: Optional[str] = None
 
+
 class ItemsResp(BaseModel):
     kind: str
     id: str
@@ -71,7 +46,6 @@ class ItemsResp(BaseModel):
     volumeInfo: VolumeInfo
 
 
- 
 class TitleResponse(BaseModel):
     kind: str
     totalItems: int
@@ -90,7 +64,13 @@ class Docs(BaseModel):
     has_fulltext:  Optional[bool] = None
     public_scan_b: Optional[bool] = None
     title: Optional[str] = None
-    cover: Optional[str] = None
+
+    @computed_field
+    def cover_url(self) -> Optional[str]:
+        if self.cover_i:
+            return f'https://covers.openlibrary.org/b/id/{self.cover_i}-M.jpg'
+        return None
+
 
 
 # class Author(BaseModel):

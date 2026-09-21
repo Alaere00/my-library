@@ -26,7 +26,6 @@ app.add_middleware(
     allow_headers=["*"],              # Allows all headers
 )
 
-params = {"key": settings.google_books_api_key}
 
 @app.get("/healthz")
 def read_root():
@@ -78,10 +77,14 @@ def get_book_info_by_isbn(isbn: str, page: int = 1, limit: int = 10) -> List[Vol
     max_results = min(limit, 40)
     start_index = (page - 1) * max_results
     params = {"key": settings.google_books_api_key, "startIndex": start_index, "maxResult": max_results}
-    response = requests.get(f"{settings.google_books_api_url}?q=isbn:{isbn}", params=params)
-    data = TitleResponse(**response.json())
+    try: 
+        response = requests.get(f"{settings.google_books_api_url}?q=isbn:{isbn}", params=params)
+        response.status_code()
+        data = TitleResponse(**response.json())
 
-    volume_info = [info.volumeInfo for info in data.items]
+        volume_info = [info.volumeInfo for info in data.items]
+    except requests.ConnectionError as e:
+        print("Connection error", e.response)
 
     return volume_info
 
@@ -91,7 +94,6 @@ def get_book_info_by_title(query: str):
 
 
 
-# https://covers.openlibrary.org/b/$key/$value-$size.jpg
 @app.get("/search/by-author/{author_name}")
 def get_book_info_by_author(author_name: str):
     url = f"https://openlibrary.org/search.json?author={author_name}"
@@ -111,7 +113,6 @@ def get_book_info_by_author(author_name: str):
     return author_resp
 
     
-
 
 @app.post('/sign_up/{email}/{password}')
 async def create_new_user(email: str, password: str):
