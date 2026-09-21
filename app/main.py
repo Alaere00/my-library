@@ -1,7 +1,6 @@
-import http
 from typing import List
 import httpx
-from app.schemas.book_model import TitleResponse, VolumeInfo
+from app.schemas.book_model import TitleResponse, VolumeInfo, AuthorResp, Docs
 from fastapi import FastAPI, HTTPException, Depends, Header
 import requests
 from app.settings import settings
@@ -75,8 +74,7 @@ async def get_title_by_name_or_author(query: str, page: int = 1, per_page: int =
         return data
 
 
-@app.get("/book/{isbn}/info")
-# debating adding total found titles
+@app.get("/search/{isbn}/info")
 def get_book_info_by_isbn(isbn: str, page: int = 1, limit: int = 10) -> List[VolumeInfo]:
     max_results = min(limit, 40)
     start_index = (page - 1) * max_results
@@ -87,6 +85,33 @@ def get_book_info_by_isbn(isbn: str, page: int = 1, limit: int = 10) -> List[Vol
     volume_info = [info.volumeInfo for info in data.items]
 
     return volume_info
+
+@app.get("/search/title-info")
+def get_book_info_by_title(query: str):
+    pass
+
+
+
+
+@app.get("/search/by-author/{author_name}")
+def get_book_info_by_author(author_name: str):
+    url = f"https://openlibrary.org/search.json?author={author_name}"
+    response = requests.get(url=url, timeout=5)
+    response.raise_for_status()
+
+    if response.ok:
+        try:
+            data = {**response.json(), "docs": [Docs(**items) for items in response.json()["docs"]]}
+
+            author_resp = AuthorResp(**data)
+
+        except ValueError as e:
+            print("Response error", response.text)
+
+
+    return author_resp
+
+    
 
 
 @app.post('/sign_up/{email}/{password}')
