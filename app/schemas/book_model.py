@@ -7,14 +7,6 @@ class IndustryIdentifiers(BaseModel):
     identifier: str
 
 
-class RecommendationRequest(BaseModel):
-    book_id: str
-
-
-# class RecommendationResponse(BaseModel):
-#     source: Book
-#     recommendations: list[Book]
-
 class ImageLinks(BaseModel):
     smallThumbnail: Optional[str] = None
     thumbnail: Optional[str] = None

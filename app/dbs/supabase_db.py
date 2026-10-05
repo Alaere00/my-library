@@ -70,10 +70,6 @@ async def update_reading_status():
 
 
 
-async def update_favorites():
-    pass
-
-
 
 async def ingest_searched_book_titles():
     pass

@@ -7,6 +7,7 @@ from app.settings import settings
 from app.schemas.auth_model import UserProfile
 from fastapi.middleware.cors import CORSMiddleware
 from app.dbs.supabase_db import user_sign_up, create_user_profile, get_current_user_id
+from app.services.embeddings.embeddings import get_book_embeddings
 import isbnlib 
 
 
@@ -117,6 +118,13 @@ async def get_book_info_by_author(author_name: Optional[str] = Query(None, descr
 
     except (ValueError, KeyError, TypeError) as e:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f'{str(e)}')
+
+
+@app.post("/books/embeddings")
+# method to test the embeddings for the books in the database
+def generate_book_embeddings():
+    return get_book_embeddings()
+
     
     
 @app.post('/sign_up/{email}/{password}')
