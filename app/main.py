@@ -2,14 +2,14 @@ from typing import List, Optional
 import httpx
 import requests
 from fastapi import FastAPI, HTTPException, Depends, Header, Query, status
-from app.schemas.book_model import TitleResponse, VolumeInfo, BookResp, Docs
+from app.schemas.book_model import TitleResponse, VolumeInfo, BookResp, Docs, WorkDetails, WorkDescription
 from app.settings import settings
 from app.schemas.auth_model import UserProfile
 from fastapi.middleware.cors import CORSMiddleware
-from app.dbs.supabase_db import user_sign_up, create_user_profile, get_current_user_id
+from app.dbs.supabase_db import user_sign_up, user_sign_in, create_user_profile, get_current_user_id
 from app.services.embeddings.embeddings import get_book_embeddings
 import isbnlib 
-
+from app.temp.temp_data import favorites
 
 origins = [
     "http://localhost:5173",
@@ -97,7 +97,9 @@ async def get_book_info_by_author(author_name: Optional[str] = Query(None, descr
             status_code=status.HTTP_400_BAD_REQUEST, detail="Must provide a book title or author name"
         )
     
-    params = {} 
+    params = {
+        "fields": "key,title,author_key,author_name,subject,first_sentence,cover_i",
+    } 
     if author_name:
         params["author"] = author_name
     if book_title:
@@ -113,11 +115,26 @@ async def get_book_info_by_author(author_name: Optional[str] = Query(None, descr
 
     try:
         data = {**response.json(), "docs": [Docs(**items) for items in response.json()["docs"]]}
-        author_resp = BookResp(**data)
-        return author_resp
+        resp = BookResp(**data)
+        return resp
 
     except (ValueError, KeyError, TypeError) as e:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f'{str(e)}')
+
+
+async def enrich_book_details(book: Docs) -> Docs:
+    if book.key:
+        url = f"https://openlibrary.org{book.key}.json"
+
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(url)
+            response.raise_for_status()
+            work = WorkDetails(**response.json())
+            description = work.description.value if isinstance(work.description, WorkDescription) else work.description
+
+        return book.model_copy(update={"description": book.description or description, "subjects": book.subjects or work.subjects})
+
+
 
 
 @app.post("/books/embeddings")
@@ -127,11 +144,17 @@ def generate_book_embeddings():
 
     
     
-@app.post('/sign_up/{email}/{password}')
+@app.post('/sign_up')
 async def create_new_user(email: str, password: str):
     new_user = await user_sign_up(email, password)
 
     return new_user
+
+
+@app.get('/sign_in')
+async def sign_in_User(email: str, password: str):
+    user_sign_in = await user_sign_in(email, password)
+    return user_sign_in
 
 
 @app.post('/update_profiles')
@@ -155,8 +178,11 @@ def add_read_title_to_shelf(title: str):
 
 
 @app.post("/my-shelf/favorite/{title}")
-def add_title_to_favorites(title: str):
-    pass
+def add_title_to_favorites(book: VolumeInfo, user_id: str = Depends(get_current_user_id)):
+    for book in favorites:
+        print("auth user_id", user_id)
+        print(book.model_dump())
+
 
 
 @app.post("/my-shelf/tbr/{title}")
@@ -180,4 +206,9 @@ def remove_title_from_shelf(shelf_type, title):
 
     # Along with the search functionality, we need to implement a recommendation system that can suggest books based on user preferences and reading history. This will require us to store user data and book data in a database, and then use machine learning models to generate recommendations.
     # Need to find the best model for embedding the book data and the user preferences.
+
+@app.post("/my-shelf/recommendations")
+def mock_book_recommendations():
+    for book in favorites:
+        print(book.model_dump())
 

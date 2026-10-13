@@ -1,5 +1,5 @@
-from typing import List, Dict, Optional, Any
-from pydantic import BaseModel, computed_field
+from typing import List, Dict, Optional, Literal
+from pydantic import BaseModel, Field, computed_field
 
 
 class IndustryIdentifiers(BaseModel):
@@ -56,6 +56,9 @@ class Docs(BaseModel):
     has_fulltext:  Optional[bool] = None
     public_scan_b: Optional[bool] = None
     title: Optional[str] = None
+    first_sentence: Optional[List[str]] = None
+    description: Optional[List[str]] = None
+    subjects: Optional[List[str]] = None
 
     @computed_field
     def cover_url(self) -> Optional[str]:
@@ -64,16 +67,15 @@ class Docs(BaseModel):
         return None
 
 
+class WorkDescription(BaseModel):
+    type: Optional[str] = None
+    value: Optional[str] = None
 
-# class Author(BaseModel):
-    # text: Optional[list[str]] = None
-    # type: Optional[str] = None
-    # alternate_names: Optional[list[str]] = None
-    # birth_date: Optional[str] = None
-    # top_work: Optional[str] = None
-    # work_count: Optional[int] = None
-    # top_subjects: Optional[list[str]] = None
-    # _version_: Optional[int] = None
+
+class WorkDetails(BaseModel):
+    description: Optional[str | WorkDescription] = None
+    subjects: Optional[List[str]] = None
+
 
 
 class BookResp(BaseModel):
@@ -81,3 +83,8 @@ class BookResp(BaseModel):
     start: int
     numFoundExact: bool
     docs: List[Docs]
+
+
+class FavoriteCreate(BaseModel):
+    provider: Literal["openlibrary", "googlebooks"]
+    book: Docs
