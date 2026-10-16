@@ -3,12 +3,11 @@ from typing import Optional
 
 
 class Settings(BaseSettings):
-    google_books_api_key: Optional[str] = None
-    google_books_api_url: str = ""
     supabase_api_key: Optional[str] = None
     supabase_url: Optional[str] = None
     user_agent: Optional[str] = None
-    top_k: int = 10
+    hardcover_api_url: Optional[str] = ""
+    hardcover_api_key: Optional[str] = None
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

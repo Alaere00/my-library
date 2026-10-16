@@ -1,48 +1,81 @@
-from typing import List, Dict, Optional, Literal
-from pydantic import BaseModel, Field, computed_field
+from typing import Dict, List, Literal, Optional
+from pydantic import BaseModel, computed_field, field_validator
 
-
-class IndustryIdentifiers(BaseModel):
-    type: str
-    identifier: str
-
-
-class ImageLinks(BaseModel):
-    smallThumbnail: Optional[str] = None
-    thumbnail: Optional[str] = None
-
-
-class VolumeInfo(BaseModel):
-    title: str
-    authors: Optional[list[str]] = None
-    publisher: Optional[str] = None
-    publishedDate: Optional[str] = None
+class Series(BaseModel):
+    author: Optional[str] = None
+    author_id: Optional[int] = None
+    books_count: Optional[int] = None
     description: Optional[str] = None
-    # industryIdentifiers: Optional[List[IndustryIdentifiers]] = None
-    industryIdentifiers: List[Dict[str, str]] = None
-    pageCount: Optional[int] = None
-    printType: Optional[str] = None
-    mainCategory: Optional[str] = None
-    averageRating: Optional[int | float] = None
-    ratingsCount: Optional[int] = None
-    imageLinks: Optional[ImageLinks] = None
-    language: Optional[str] = None
-    infoLink: Optional[str] = None
+    id: int
+    is_completed: Optional[bool]
+    locked: Optional[bool] = None
+    name: str
+    primary_books_count: int
+    user_id: int 
 
 
-class ItemsResp(BaseModel):
-    kind: str
-    id: str
-    etag: str
-    selfLink: str
-    volumeInfo: VolumeInfo
+class Book(BaseModel):
+    book: str
+    book_id: int 
+    compilation: Optional[bool] = None
+    created_at: Optional[str] = None
+    details: Optional[str] = None
+    featured: Optional[bool] = None
+    id: int
+    position: Optional[int] = None
+    series: Optional[Series] = None
+    series_id: Optional[int] = None
+    updated_at: Optional[str] = None
 
 
-class TitleResponse(BaseModel):
-    kind: str
-    totalItems: int
-    items: Optional[List[ItemsResp]] = None
+class BookInfo(BaseModel):
+    author_names: Optional[List[str]] = None
+    content_warnings:  Optional[List[str]] = None
+    # contribution_types - Array of contribution types for contributions
+    # contributions - Array of contribution objects
+    description: Optional[str] = None
+    featured_series: Optional[Series] = None
+    featured_series_position: Optional[int] = None
+    genres: Optional[List[str]] = None
+    # isbns - The ISBNs of the book
+    has_audiobook:  Optional[bool] = None
+    has_ebook: Optional[bool] = None
+    pages:  Optional[int] = None
+    rating:  Optional[float] = None
+    ratings_count:  Optional[int] = None
+    release_date_i:  Optional[int] = None
+    release_year: Optional[int] = None
+    series_names: Optional[List[str]] = None
+    subtitle: Optional[str] = None
+    tags: Optional[List[str]] = None
+    title : Optional[str] = None 
 
+
+class Contribution(BaseModel):
+    book: BookInfo
+
+
+class CachedImage(BaseModel):
+    id: Optional[int] = None
+    url: Optional[str] = None
+    color: Optional[str] = None
+    width: Optional[int] = None
+    height: Optional[int] = None
+    color_name: Optional[str] = None
+
+class AuthorInfo(BaseModel):
+    alternate_names: Optional[List[str]] = None
+    bio: Optional[str] = None
+    books_count: Optional[int] = None
+    cached_image: Optional[CachedImage] = None
+    contributions: list[Contribution]
+    identifiers: Optional[Dict[str, list[str]]] = None
+    image_id: Optional[int] = None
+    is_bipoc: Optional[bool] = None
+    name: str 
+
+
+#########################################
 
 class Docs(BaseModel):
     key: Optional[str] = None
@@ -86,5 +119,5 @@ class BookResp(BaseModel):
 
 
 class FavoriteCreate(BaseModel):
-    provider: Literal["openlibrary", "googlebooks"]
+    provider: Literal["openlibrary", "hardcover"]
     book: Docs

@@ -1,15 +1,15 @@
-from typing import List, Optional
+from typing import Optional
 import httpx
-import requests
 from fastapi import FastAPI, HTTPException, Depends, Header, Query, status
-from app.schemas.book_model import TitleResponse, VolumeInfo, BookResp, Docs, WorkDetails, WorkDescription
+from app.schemas.book_model import AuthorInfo, BookResp, Docs, WorkDetails, WorkDescription
 from app.settings import settings
 from app.schemas.auth_model import UserProfile
 from fastapi.middleware.cors import CORSMiddleware
 from app.dbs.supabase_db import user_sign_up, user_sign_in, create_user_profile, get_current_user_id
-from app.services.embeddings.embeddings import get_book_embeddings
+# from app.services.embeddings.embeddings import get_book_embeddings
 import isbnlib 
 from app.temp.temp_data import favorites
+from app.schemas.hardcover_api_schema import author_query, to_slug
 
 origins = [
     "http://localhost:5173",
@@ -32,60 +32,77 @@ app.add_middleware(
 def read_root():
     return {"message": "Hello World"}
 
-@app.get("/search")
-async def universal_search(q: str, page: int = 1, per_page: int = 10):
-    validated_isbn = isbnlib.canonical(q)
+# @app.get("/search")
+# async def universal_search(q: str, page: int = 1, per_page: int = 10):
+#     validated_isbn = isbnlib.canonical(q)
  
-    if validated_isbn:
-        return get_book_info_by_isbn(q)
-    else: 
-        title_details = await get_title_by_name_or_author(q, page, per_page)
+#     if validated_isbn:
+#         return get_book_info_by_isbn(q)
+#     else: 
+#         title_details = await get_title_by_name_or_author(q, page, per_page)
 
-    return title_details
+#     return title_details
 
-# title or author -> universal search
-async def get_title_by_name_or_author(query: str, page: int = 1, per_page: int = 10):
-    max_results = min(per_page,  40)
-    start_index = (page - 1) * max_results
+# # title or author -> universal search
+# async def get_title_by_name_or_author(query: str, page: int = 1, per_page: int = 10):
+#     max_results = min(per_page,  40)
+#     start_index = (page - 1) * max_results
 
-    params = {
-        "q": f':"{query}"+OR+inauthor:"{query}"',
-        "key": settings.google_books_api_key,
-        "printType": "books",
-        "projection": "full",
-        "startIndex": start_index,
-        "maxResults": per_page
-    }
+#     params = {
+#         "q": f':"{query}"+OR+inauthor:"{query}"',
+#         "key": settings.google_books_api_key,
+#         "printType": "books",
+#         "projection": "full",
+#         "startIndex": start_index,
+#         "maxResults": per_page
+#     }
 
-    url = settings.google_books_api_url
+#     url = settings.google_books_api_url
  
-    async with httpx.AsyncClient(timeout=5.0) as client:
-        resp = await client.get(url, params=params)
-        resp.raise_for_status()
-        data = TitleResponse(**resp.json())
+#     async with httpx.AsyncClient(timeout=5.0) as client:
+#         resp = await client.get(url, params=params)
+#         resp.raise_for_status()
+#         data = TitleResponse(**resp.json())
+
+#     return data if data else []
+
+    # return clean_book_data(data) if data else []
 
 
-    if not data:
-        return []
-    else:
-        return data
+@app.get("/search/author/{author_name}", response_model=AuthorInfo)
+async def get_author_info(author_name: str):
+
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.post(settings.hardcover_api_url, 
+                json={"query": author_query , "variables": {"slug": to_slug(author_name)}},
+                headers={ "Authorization": f"Bearer {settings.hardcover_api_key}", "content-type": "application/json"})
+                
+            if response.status_code == 200:
+                data = response.json()
+            return AuthorInfo(**data["data"]["authors"][0]) if data["data"]["authors"] else None
+    except httpx.RequestError as e:
+        print(f"Request error: {e}")
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Hardcover API is unavailable: {e}")
 
 
-@app.get("/books/{isbn}")
-def get_book_info_by_isbn(isbn: str, page: int = 1, limit: int = 10) -> List[VolumeInfo]:
-    max_results = min(limit, 40)
-    start_index = (page - 1) * max_results
-    params = {"key": settings.google_books_api_key, "startIndex": start_index, "maxResult": max_results}
-    try: 
-        response = requests.get(f"{settings.google_books_api_url}?q=isbn:{isbn}", params=params)
-        response.status_code()
-        data = TitleResponse(**response.json())
 
-        volume_info = [info.volumeInfo for info in data.items]
-    except requests.ConnectionError as e:
-        print("Connection error", e.response)
 
-    return volume_info
+# @app.get("/books/{isbn}")
+# def get_book_info_by_isbn(isbn: str, page: int = 1, limit: int = 10) -> List[VolumeInfo]:
+#     max_results = min(limit, 40)
+#     start_index = (page - 1) * max_results
+#     params = {"key": settings.google_books_api_key, "startIndex": start_index, "maxResult": max_results}
+#     try: 
+#         response = requests.get(f"{settings.google_books_api_url}?q=isbn:{isbn}", params=params)
+#         response.status_code()
+#         data = TitleResponse(**response.json())
+
+#         volume_info = [info.volumeInfo for info in data.items]
+#     except requests.ConnectionError as e:
+#         print("Connection error", e.response)
+
+#     return volume_info
 
 
 @app.get("/books", response_model=BookResp)
@@ -122,6 +139,7 @@ async def get_book_info_by_author(author_name: Optional[str] = Query(None, descr
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f'{str(e)}')
 
 
+
 async def enrich_book_details(book: Docs) -> Docs:
     if book.key:
         url = f"https://openlibrary.org{book.key}.json"
@@ -136,11 +154,10 @@ async def enrich_book_details(book: Docs) -> Docs:
 
 
 
-
-@app.post("/books/embeddings")
-# method to test the embeddings for the books in the database
-def generate_book_embeddings():
-    return get_book_embeddings()
+# @app.post("/books/embeddings")
+# # method to test the embeddings for the books in the database
+# def generate_book_embeddings():
+#     return get_book_embeddings()
 
     
     
@@ -175,13 +192,6 @@ async def update_user_profile(update_data: UserProfile, user_id: str = Depends(g
 @app.post("/my_shelf/completed/{title}")
 def add_read_title_to_shelf(title: str):
     pass
-
-
-@app.post("/my-shelf/favorite/{title}")
-def add_title_to_favorites(book: VolumeInfo, user_id: str = Depends(get_current_user_id)):
-    for book in favorites:
-        print("auth user_id", user_id)
-        print(book.model_dump())
 
 
 
