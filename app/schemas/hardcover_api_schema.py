@@ -1,5 +1,13 @@
 import re
 
+search_query = """
+query Search($q: String!, $page: Int!, $per_page: Int!){
+    search(query: $q, query_type: "Book", per_page: $per_page, page: $page){
+        results
+    }
+}
+"""
+
 title_query = """
 query GetBookInfoByTitle($title: String!){
     books(where: {title: {_eq: $title}}, limit: 10){

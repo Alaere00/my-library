@@ -6,29 +6,17 @@ class Series(BaseModel):
     author_id: Optional[int] = None
     books_count: Optional[int] = None
     description: Optional[str] = None
-    id: int
-    is_completed: Optional[bool]
+    id: Optional[int] = None
+    is_completed: Optional[bool] = None
     locked: Optional[bool] = None
-    name: str
-    primary_books_count: int
-    user_id: int 
+    name: Optional[str] = None
+    primary_books_count: Optional[int] = None
+    user_id: Optional[int] = None
 
-
-class Book(BaseModel):
-    book: str
-    book_id: int 
-    compilation: Optional[bool] = None
-    created_at: Optional[str] = None
-    details: Optional[str] = None
-    featured: Optional[bool] = None
-    id: int
-    position: Optional[int] = None
-    series: Optional[Series] = None
-    series_id: Optional[int] = None
-    updated_at: Optional[str] = None
 
 class Character(BaseModel):
     name: str
+
 
 class BookCharacter(BaseModel):
     character: Character
@@ -55,7 +43,8 @@ class BookInfo(BaseModel):
     featured_series: Optional[Series] = None
     featured_series_position: Optional[int] = None
     genres: Optional[List[str]] = None
-    # isbns - The ISBNs of the book
+    isbns: Optional[List[str]] = None
+    moods: Optional[List[str]] = None
     has_audiobook:  Optional[bool] = None
     has_ebook: Optional[bool] = None
     pages:  Optional[int] = None
@@ -82,6 +71,14 @@ class AuthorInfo(BaseModel):
     image_id: Optional[int] = None
     is_bipoc: Optional[bool] = None
     name: str 
+
+
+
+class BookSearchResult(BaseModel):
+  found: Optional[int] = None
+  hits: list[BookInfo] = None
+  page: int = None
+
 
 
 #########################################

@@ -1,15 +1,17 @@
-from typing import Optional
+import json
 import httpx
+from typing import Optional
 from fastapi import FastAPI, HTTPException, Depends, Header, Query, status
-from app.schemas.book_model import AuthorInfo, BookInfo, BookResp, Docs, WorkDetails, WorkDescription
+from fastapi.middleware.cors import CORSMiddleware
+from app.schemas.book_model import AuthorInfo, BookInfo, BookResp, BookSearchResult, Docs, WorkDetails, WorkDescription
 from app.settings import settings
 from app.schemas.auth_model import UserProfile
-from fastapi.middleware.cors import CORSMiddleware
+from app.schemas.hardcover_api_schema import author_query, title_query, search_query, to_slug
 from app.dbs.supabase_db import user_sign_up, user_sign_in, create_user_profile, get_current_user_id
 # from app.services.embeddings.embeddings import get_book_embeddings
 import isbnlib 
 from app.temp.temp_data import favorites
-from app.schemas.hardcover_api_schema import author_query, title_query, to_slug
+
 
 origins = [
     "http://localhost:5173",
@@ -32,16 +34,26 @@ app.add_middleware(
 def read_root():
     return {"message": "Hello World"}
 
-# @app.get("/search")
-# async def universal_search(q: str, page: int = 1, per_page: int = 10):
-#     validated_isbn = isbnlib.canonical(q)
- 
-#     if validated_isbn:
-#         return get_book_info_by_isbn(q)
-#     else: 
-#         title_details = await get_title_by_name_or_author(q, page, per_page)
+@app.get("/general-search", response_model=BookSearchResult)
+async def search_books(query: str, page: int = 1, per_page: int = 100) -> BookSearchResult:
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.post(settings.hardcover_api_url, 
+                json={"query": search_query , "variables": {"q": query, "page": page, "per_page": per_page }},
+                headers={ "Authorization": f"Bearer {settings.hardcover_api_key}", "content-type": "application/json"})
+                
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Hardcover API is unavailable: {e}")
+    
 
-#     return title_details
+    if response.status_code != 200:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Error")
+    data = response.json()
+    res = data["data"]["search"]["results"]
+    if isinstance(res, str):
+        res = json.loads(res)
+
+    return BookSearchResult(found=res["found"], hits=[BookInfo.model_validate(hit["document"]) for hit in res["hits"]], page=res["page"])
 
 
 @app.get("/search/title/{book_title}", response_model=list[BookInfo])
@@ -78,8 +90,6 @@ async def get_author_info(author_name: str):
     except httpx.RequestError as e:
         print(f"Request error: {e}")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Hardcover API is unavailable: {e}")
-
-
 
 
 # @app.get("/books/{isbn}")
