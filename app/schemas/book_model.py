@@ -1,4 +1,4 @@
-from typing import Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, computed_field, field_validator
 
 class Series(BaseModel):
@@ -27,12 +27,30 @@ class Book(BaseModel):
     series_id: Optional[int] = None
     updated_at: Optional[str] = None
 
+class Character(BaseModel):
+    name: str
+
+class BookCharacter(BaseModel):
+    character: Character
+
+
+class CachedImage(BaseModel):
+    id: Optional[int] = None
+    url: Optional[str] = None
+    color: Optional[str] = None
+    width: Optional[int] = None
+    height: Optional[int] = None
+    color_name: Optional[str] = None
+
 
 class BookInfo(BaseModel):
+    title : Optional[str] = None 
     author_names: Optional[List[str]] = None
+    book_characters: list[BookCharacter] = []
     content_warnings:  Optional[List[str]] = None
+    cached_image: Optional[CachedImage] = None
     # contribution_types - Array of contribution types for contributions
-    # contributions - Array of contribution objects
+    contributions: list[dict[str, Any]] = []
     description: Optional[str] = None
     featured_series: Optional[Series] = None
     featured_series_position: Optional[int] = None
@@ -48,20 +66,11 @@ class BookInfo(BaseModel):
     series_names: Optional[List[str]] = None
     subtitle: Optional[str] = None
     tags: Optional[List[str]] = None
-    title : Optional[str] = None 
 
 
 class Contribution(BaseModel):
     book: BookInfo
 
-
-class CachedImage(BaseModel):
-    id: Optional[int] = None
-    url: Optional[str] = None
-    color: Optional[str] = None
-    width: Optional[int] = None
-    height: Optional[int] = None
-    color_name: Optional[str] = None
 
 class AuthorInfo(BaseModel):
     alternate_names: Optional[List[str]] = None

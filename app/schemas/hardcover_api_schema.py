@@ -1,5 +1,51 @@
 import re
 
+title_query = """
+query GetBookInfoByTitle($title: String!){
+    books(where: {title: {_eq: $title}}, limit: 10){
+        alternative_titles
+        description
+        featured_book_series {
+            position
+            series {
+                name
+                slug
+            }
+        }
+        id
+        image_id
+        images {
+            colors
+            height
+            id
+            url
+            width
+        }
+        pages
+        release_date
+        release_year
+        slug
+        title
+        book_characters {
+            character {
+                name
+            }
+        }
+        cached_contributors
+        cached_featured_series
+        cached_header_image
+        cached_image
+        cached_tags
+        literary_type_id
+        contributions {
+            author {
+                name
+            }
+        }
+    }
+}
+"""
+
 author_query = """
 query GetBookInfoByAuthor($slug: String!){
     authors(where: {slug: {_eq: $slug}}, limit: 10){

@@ -1,7 +1,7 @@
 from typing import Optional
 import httpx
 from fastapi import FastAPI, HTTPException, Depends, Header, Query, status
-from app.schemas.book_model import AuthorInfo, BookResp, Docs, WorkDetails, WorkDescription
+from app.schemas.book_model import AuthorInfo, BookInfo, BookResp, Docs, WorkDetails, WorkDescription
 from app.settings import settings
 from app.schemas.auth_model import UserProfile
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,7 +9,7 @@ from app.dbs.supabase_db import user_sign_up, user_sign_in, create_user_profile,
 # from app.services.embeddings.embeddings import get_book_embeddings
 import isbnlib 
 from app.temp.temp_data import favorites
-from app.schemas.hardcover_api_schema import author_query, to_slug
+from app.schemas.hardcover_api_schema import author_query, title_query, to_slug
 
 origins = [
     "http://localhost:5173",
@@ -43,35 +43,29 @@ def read_root():
 
 #     return title_details
 
-# # title or author -> universal search
-# async def get_title_by_name_or_author(query: str, page: int = 1, per_page: int = 10):
-#     max_results = min(per_page,  40)
-#     start_index = (page - 1) * max_results
 
-#     params = {
-#         "q": f':"{query}"+OR+inauthor:"{query}"',
-#         "key": settings.google_books_api_key,
-#         "printType": "books",
-#         "projection": "full",
-#         "startIndex": start_index,
-#         "maxResults": per_page
-#     }
+@app.get("/search/title/{book_title}", response_model=list[BookInfo])
+async def get_book_by_title(book_title: str) -> list[BookInfo]:
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.post(settings.hardcover_api_url, 
+                json={"query": title_query , "variables": {"title": book_title}},
+                headers={ "Authorization": f"Bearer {settings.hardcover_api_key}", "content-type": "application/json"})
+                
+    except httpx.RequestError as e:
 
-#     url = settings.google_books_api_url
- 
-#     async with httpx.AsyncClient(timeout=5.0) as client:
-#         resp = await client.get(url, params=params)
-#         resp.raise_for_status()
-#         data = TitleResponse(**resp.json())
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Hardcover API is unavailable: {e}")
+    
 
-#     return data if data else []
-
-    # return clean_book_data(data) if data else []
+    if response.status_code != 200:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail={e})
+    data = response.json()
+    res = [BookInfo(**b) for b in data["data"]["books"]]
+    return res
 
 
 @app.get("/search/author/{author_name}", response_model=AuthorInfo)
 async def get_author_info(author_name: str):
-
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             response = await client.post(settings.hardcover_api_url, 
@@ -115,12 +109,10 @@ async def get_book_info_by_author(author_name: Optional[str] = Query(None, descr
         )
     
     params = {
-        "fields": "key,title,author_key,author_name,subject,first_sentence,cover_i",
+        "fields": "key,author_key,author_name,subject,first_sentence,cover_i",
     } 
     if author_name:
         params["author"] = author_name
-    if book_title:
-        params["title"] = book_title
 
     async with httpx.AsyncClient(timeout=5.0) as client:
         try:
