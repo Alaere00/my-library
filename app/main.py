@@ -3,14 +3,14 @@ import httpx
 from typing import Optional
 from fastapi import FastAPI, HTTPException, Depends, Header, Query, status
 from fastapi.middleware.cors import CORSMiddleware
-from app.schemas.book_model import AuthorInfo, BookInfo, BookResp, BookSearchResult, Docs, WorkDetails, WorkDescription
+from app.schemas.book_model import AuthorInfo, BookInfo, BookResp, BookSearchResult, Docs, Edition, WorkDetails, WorkDescription
 from app.settings import settings
 from app.schemas.auth_model import UserProfile
-from app.schemas.hardcover_api_schema import author_query, title_query, search_query, to_slug
+from app.schemas.hardcover_api_schema import author_query, title_query, search_query, isbn_query, to_slug
 from app.dbs.supabase_db import user_sign_up, user_sign_in, create_user_profile, get_current_user_id
 # from app.services.embeddings.embeddings import get_book_embeddings
-import isbnlib 
 from app.temp.temp_data import favorites
+import isbnlib 
 
 
 origins = [
@@ -34,7 +34,8 @@ app.add_middleware(
 def read_root():
     return {"message": "Hello World"}
 
-@app.get("/general-search", response_model=BookSearchResult)
+
+@app.get("/search/general", response_model=BookSearchResult)
 async def search_books(query: str, page: int = 1, per_page: int = 100) -> BookSearchResult:
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
@@ -92,21 +93,34 @@ async def get_author_info(author_name: str):
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Hardcover API is unavailable: {e}")
 
 
-# @app.get("/books/{isbn}")
-# def get_book_info_by_isbn(isbn: str, page: int = 1, limit: int = 10) -> List[VolumeInfo]:
-#     max_results = min(limit, 40)
-#     start_index = (page - 1) * max_results
-#     params = {"key": settings.google_books_api_key, "startIndex": start_index, "maxResult": max_results}
-#     try: 
-#         response = requests.get(f"{settings.google_books_api_url}?q=isbn:{isbn}", params=params)
-#         response.status_code()
-#         data = TitleResponse(**response.json())
+@app.get("/search/isbn/{isbn}")
+async def get_book_info_by_isbn(isbn: str):
+    field = ""
 
-#         volume_info = [info.volumeInfo for info in data.items]
-#     except requests.ConnectionError as e:
-#         print("Connection error", e.response)
+    isbn = isbnlib.canonical(isbn)
 
-#     return volume_info
+    if isbnlib.is_isbn10(isbn):
+        field = "isbn_10"
+    elif isbnlib.is_isbn13(isbn):
+        field = "isbn_13"
+
+    query = isbn_query.replace("FIELD", field)
+
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.post(settings.hardcover_api_url, 
+                json={"query": query , "variables": {"isbn": isbn }},
+                headers={ "Authorization": f"Bearer {settings.hardcover_api_key}", "content-type": "application/json"})
+                
+            data = response.json()
+
+            if response.status_code == 200 and data:
+                return [Edition(**b) for b in data["data"]["editions"]]
+
+            return []
+    except httpx.RequestError as e:
+        print(f"Request error: {e}")
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Hardcover API is unavailable: {e}")
 
 
 @app.get("/books", response_model=BookResp)
@@ -166,7 +180,6 @@ async def enrich_book_details(book: Docs) -> Docs:
 @app.post('/sign_up')
 async def create_new_user(email: str, password: str):
     new_user = await user_sign_up(email, password)
-
     return new_user
 
 

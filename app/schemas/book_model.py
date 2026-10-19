@@ -73,13 +73,35 @@ class AuthorInfo(BaseModel):
     name: str 
 
 
-
 class BookSearchResult(BaseModel):
   found: Optional[int] = None
   hits: list[BookInfo] = None
   page: int = None
 
 
+class Publisher(BaseModel):
+    name: Optional[str] = None
+
+
+class BookEdition(BaseModel):
+    id: int
+    title: Optional[str] = None
+    rating: Optional[float] = None
+    description: Optional[str] = None
+
+
+class Edition(BaseModel):
+    id: int
+    title: Optional[str] = None
+    subtitle: Optional[str] = None
+    isbn_13: Optional[str] = None
+    isbn_10: Optional[str] = None
+    asin: Optional[str] = None
+    pages: Optional[int] = None
+    release_date: Optional[str] = None         
+    cached_contributors: Optional[list[dict]] = None 
+    publisher: Optional[Publisher] = None
+    book: Optional[BookEdition] = None
 
 #########################################
 

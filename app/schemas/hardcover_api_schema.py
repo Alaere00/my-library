@@ -80,6 +80,40 @@ query GetBookInfoByAuthor($slug: String!){
 }
 """
 
+isbn_query = """
+query GetEditionByISBN($isbn: String!) {
+  editions(where: {FIELD: {_eq: $isbn }}) {
+      id
+      title
+      subtitle
+      isbn_13
+      isbn_10
+      asin
+      pages
+      release_date
+      physical_format
+      publisher {
+          name
+      }
+      book {
+          id
+          title
+          rating
+          contributions {
+              author {
+                  name
+              }
+          }
+      }
+      language {
+          language
+      }
+      reading_format {
+          format
+      }
+  }
+}
+"""
 
 def to_slug(author_name: str) -> str:
     return re.sub(r'[^a-z0-9]+', '-', author_name.lower()).strip('-')

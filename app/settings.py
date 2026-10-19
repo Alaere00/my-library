@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     user_agent: Optional[str] = None
     hardcover_api_url: Optional[str] = ""
     hardcover_api_key: Optional[str] = None
+    openlibrary_url: str = ""
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 
