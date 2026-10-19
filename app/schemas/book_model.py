@@ -1,6 +1,8 @@
 from typing import Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, computed_field, field_validator
 
+from app.schemas.bookshelf_model import Status
+
 class Series(BaseModel):
     author: Optional[str] = None
     author_id: Optional[int] = None
@@ -32,6 +34,7 @@ class CachedImage(BaseModel):
 
 
 class BookInfo(BaseModel):
+    id: int
     title : Optional[str] = None 
     author_names: Optional[List[str]] = None
     book_characters: list[BookCharacter] = []
@@ -102,6 +105,12 @@ class Edition(BaseModel):
     cached_contributors: Optional[list[dict]] = None 
     publisher: Optional[Publisher] = None
     book: Optional[BookEdition] = None
+
+#########################################
+
+class AddToShelfRequest(BaseModel):
+    book: BookInfo
+    status: Status
 
 #########################################
 

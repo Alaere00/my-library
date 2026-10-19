@@ -1,13 +1,15 @@
 import json
+from fastapi import security
 import httpx
-from typing import Optional
 from fastapi import FastAPI, HTTPException, Depends, Header, Query, status
 from fastapi.middleware.cors import CORSMiddleware
-from app.schemas.book_model import AuthorInfo, BookInfo, BookResp, BookSearchResult, Docs, Edition, WorkDetails, WorkDescription
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from app.schemas.book_model import AddToShelfRequest, AuthorInfo, BookInfo, BookSearchResult, Edition
+from app.schemas.bookshelf_model import Status
 from app.settings import settings
 from app.schemas.auth_model import UserProfile
 from app.schemas.hardcover_api_schema import author_query, title_query, search_query, isbn_query, to_slug
-from app.dbs.supabase_db import user_sign_up, user_sign_in, create_user_profile, get_current_user_id
+from app.dbs.supabase_db import get_bookshelf, set_book_status_in_bookshelf, user_sign_up, user_sign_in, create_user_profile, get_current_user_id
 # from app.services.embeddings.embeddings import get_book_embeddings
 from app.temp.temp_data import favorites
 import isbnlib 
@@ -20,7 +22,6 @@ origins = [
 
 
 app = FastAPI()
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,            # Allows specific origins
@@ -29,6 +30,7 @@ app.add_middleware(
     allow_headers=["*"],              # Allows all headers
 )
 
+bearer_scheme = HTTPBearer()
 
 @app.get("/healthz")
 def read_root():
@@ -96,7 +98,6 @@ async def get_author_info(author_name: str):
 @app.get("/search/isbn/{isbn}")
 async def get_book_info_by_isbn(isbn: str):
     field = ""
-
     isbn = isbnlib.canonical(isbn)
 
     if isbnlib.is_isbn10(isbn):
@@ -123,57 +124,51 @@ async def get_book_info_by_isbn(isbn: str):
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Hardcover API is unavailable: {e}")
 
 
-@app.get("/books", response_model=BookResp)
-async def get_book_info_by_author(author_name: Optional[str] = Query(None, description="Search by author name"), book_title: Optional[str] = Query(None, description="Search by book title")):
-    url = f"https://openlibrary.org/search.json"
+# @app.get("/books", response_model=BookResp)
+# async def get_book_info_by_author(author_name: Optional[str] = Query(None, description="Search by author name"), book_title: Optional[str] = Query(None, description="Search by book title")):
+#     url = f"https://openlibrary.org/search.json"
 
-    if not author_name and not book_title:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Must provide a book title or author name"
-        )
+#     if not author_name and not book_title:
+#         raise HTTPException(
+#             status_code=status.HTTP_400_BAD_REQUEST, detail="Must provide a book title or author name"
+#         )
     
-    params = {
-        "fields": "key,author_key,author_name,subject,first_sentence,cover_i",
-    } 
-    if author_name:
-        params["author"] = author_name
+#     params = {
+#         "fields": "key,author_key,author_name,subject,first_sentence,cover_i",
+#     } 
+#     if author_name:
+#         params["author"] = author_name
 
-    async with httpx.AsyncClient(timeout=5.0) as client:
-        try:
-            response = await client.get(url, params=params)
-            response.raise_for_status()
+#     async with httpx.AsyncClient(timeout=5.0) as client:
+#         try:
+#             response = await client.get(url, params=params)
+#             response.raise_for_status()
 
-        except httpx.RequestError:
-            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Open library API is unavailable")
+#         except httpx.RequestError:
+#             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Open library API is unavailable")
 
-    try:
-        data = {**response.json(), "docs": [Docs(**items) for items in response.json()["docs"]]}
-        resp = BookResp(**data)
-        return resp
+#     try:
+#         data = {**response.json(), "docs": [Docs(**items) for items in response.json()["docs"]]}
+#         resp = BookResp(**data)
+#         return resp
 
-    except (ValueError, KeyError, TypeError) as e:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f'{str(e)}')
-
-
-
-async def enrich_book_details(book: Docs) -> Docs:
-    if book.key:
-        url = f"https://openlibrary.org{book.key}.json"
-
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(url)
-            response.raise_for_status()
-            work = WorkDetails(**response.json())
-            description = work.description.value if isinstance(work.description, WorkDescription) else work.description
-
-        return book.model_copy(update={"description": book.description or description, "subjects": book.subjects or work.subjects})
+#     except (ValueError, KeyError, TypeError) as e:
+#         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f'{str(e)}')
 
 
 
-# @app.post("/books/embeddings")
-# # method to test the embeddings for the books in the database
-# def generate_book_embeddings():
-#     return get_book_embeddings()
+# async def enrich_book_details(book: Docs) -> Docs:
+#     if book.key:
+#         url = f"https://openlibrary.org{book.key}.json"
+
+#         async with httpx.AsyncClient(timeout=5.0) as client:
+#             response = await client.get(url)
+#             response.raise_for_status()
+#             work = WorkDetails(**response.json())
+#             description = work.description.value if isinstance(work.description, WorkDescription) else work.description
+
+#         return book.model_copy(update={"description": book.description or description, "subjects": book.subjects or work.subjects})
+
 
     
     
@@ -185,8 +180,8 @@ async def create_new_user(email: str, password: str):
 
 @app.get('/sign_in')
 async def sign_in_User(email: str, password: str):
-    user_sign_in = await user_sign_in(email, password)
-    return user_sign_in
+    sign_in = await user_sign_in(email, password)
+    return sign_in
 
 
 @app.post('/update_profiles')
@@ -203,24 +198,22 @@ async def update_user_profile(update_data: UserProfile, user_id: str = Depends(g
     except Exception as e:
         raise HTTPException(status_code=400, detail=e)
     
-
-@app.post("/my_shelf/completed/{title}")
-def add_read_title_to_shelf(title: str):
-    pass
-
-
-
-@app.post("/my-shelf/tbr/{title}")
-def add_title_to_tbr(title):
-    pass
+@app.post("/bookshelf")
+def set_book_status(request: AddToShelfRequest, user_ID: str = Depends(get_current_user_id), credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)):
+    return set_book_status_in_bookshelf(
+        book=request.book,
+        status=request.status,
+        user_id=user_ID,
+        access_token=credentials.credentials
+    )
 
 
-@app.delete("my-shelf/TEMP/{title}")
-def remove_title_from_shelf(shelf_type, title):
-    pass
-    # in the database correlate the shelf type and remove the title 
-
-    # database for bookshelf 
+@app.get("/bookshelf")
+def get_user_bookshelf(user_ID: str = Depends(get_current_user_id), credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)):
+    return get_bookshelf(
+        user_id=user_ID,
+        access_token=credentials.credentials
+    )
 
 
 
