@@ -39,12 +39,12 @@ class BookInfo(BaseModel):
     author_names: Optional[List[str]] = None
     book_characters: list[BookCharacter] = []
     content_warnings:  Optional[List[str]] = None
-    cached_image: Optional[CachedImage] = None
+    image: Optional[CachedImage] = None
     # contribution_types - Array of contribution types for contributions
     contributions: list[dict[str, Any]] = []
     description: Optional[str] = None
     featured_series: Optional[Series] = None
-    featured_series_position: Optional[int] = None
+    featured_series_position: Optional[float] = None
     genres: Optional[List[str]] = None
     isbns: Optional[List[str]] = None
     moods: Optional[List[str]] = None

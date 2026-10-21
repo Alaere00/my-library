@@ -1,23 +1,23 @@
 import json
-from fastapi import security
+from uuid import UUID
 import httpx
-from fastapi import FastAPI, HTTPException, Depends, Header, Query, status
+from fastapi import FastAPI, HTTPException, Depends, Header, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from app.schemas.book_model import AddToShelfRequest, AuthorInfo, BookInfo, BookSearchResult, Edition
-from app.schemas.bookshelf_model import Status
+from app.schemas.bookshelf_model import FavoriteUpdate, Status
 from app.settings import settings
 from app.schemas.auth_model import UserProfile
 from app.schemas.hardcover_api_schema import author_query, title_query, search_query, isbn_query, to_slug
-from app.dbs.supabase_db import get_bookshelf, set_book_status_in_bookshelf, user_sign_up, user_sign_in, create_user_profile, get_current_user_id
+from app.dbs.supabase_db import get_bookshelf, set_book_status_in_bookshelf, set_favorite_book, user_sign_up, user_login, create_user_profile, get_current_user_id
 # from app.services.embeddings.embeddings import get_book_embeddings
 from app.temp.temp_data import favorites
 import isbnlib 
 
 
 origins = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
 ]
 
 
@@ -53,6 +53,7 @@ async def search_books(query: str, page: int = 1, per_page: int = 100) -> BookSe
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Error")
     data = response.json()
     res = data["data"]["search"]["results"]
+    print(res)
     if isinstance(res, str):
         res = json.loads(res)
 
@@ -75,6 +76,7 @@ async def get_book_by_title(book_title: str) -> list[BookInfo]:
     if response.status_code != 200:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail={e})
     data = response.json()
+    print(data)
     res = [BookInfo(**b) for b in data["data"]["books"]]
     return res
 
@@ -172,19 +174,19 @@ async def get_book_info_by_isbn(isbn: str):
 
     
     
-@app.post('/sign_up')
+@app.post('/my-bookshelf/sign-up')
 async def create_new_user(email: str, password: str):
     new_user = await user_sign_up(email, password)
     return new_user
 
 
-@app.get('/sign_in')
-async def sign_in_User(email: str, password: str):
-    sign_in = await user_sign_in(email, password)
-    return sign_in
+@app.post('/my-bookshelf/login')
+async def login_User(email: str, password: str):
+    logged_in = await user_login(email, password)
+    return logged_in
 
 
-@app.post('/update_profiles')
+@app.post('/my-bookshelf/update-profiles')
 async def update_user_profile(update_data: UserProfile, user_id: str = Depends(get_current_user_id),
                               authorization=Header(None)
                               ):
@@ -198,7 +200,7 @@ async def update_user_profile(update_data: UserProfile, user_id: str = Depends(g
     except Exception as e:
         raise HTTPException(status_code=400, detail=e)
     
-@app.post("/bookshelf")
+@app.post("/my-bookshelf/set-status")
 def set_book_status(request: AddToShelfRequest, user_ID: str = Depends(get_current_user_id), credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)):
     return set_book_status_in_bookshelf(
         book=request.book,
@@ -208,14 +210,24 @@ def set_book_status(request: AddToShelfRequest, user_ID: str = Depends(get_curre
     )
 
 
-@app.get("/bookshelf")
+@app.get("/my-bookshelf")
 def get_user_bookshelf(user_ID: str = Depends(get_current_user_id), credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)):
     return get_bookshelf(
         user_id=user_ID,
         access_token=credentials.credentials
     )
 
+@app.patch("/my-bookshelf/{book_id}/favorite")
+def update_favorite_status(book_id: UUID, update: FavoriteUpdate, user_id: str = Depends(get_current_user_id), credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)):
+    entry = set_favorite_book(
+            user_id=user_id,
+            book_id=book_id,
+            is_favorite=update.is_favorite,
+            access_token=credentials.credentials
 
+    )
+
+    return entry
 
     # Share books with friends?
     # Share reading history with friends?

@@ -8,3 +8,5 @@ class Status(Enum):
     COMPLETED = "completed"
 
 
+class FavoriteUpdate(BaseModel):
+    is_favorite: bool

@@ -1,4 +1,5 @@
 from multiprocessing import AuthenticationError
+from uuid import UUID
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi import Depends, HTTPException
 from supabase import create_client, Client 
@@ -23,7 +24,7 @@ async def user_sign_up(username: str, password: str):
     return user_data
 
 
-async def user_sign_in(username: str, password):
+async def user_login(username: str, password):
     try: 
         response = user_client.auth.sign_in_with_password({
             'email': username,
@@ -96,8 +97,8 @@ def set_book_status_in_bookshelf(*, user_id: str, catalog_book: Dict[str, Any], 
     return save_shelf_entry
     
 
-
 def get_bookshelf(*, user_id: str, access_token: str):
+    user_client.postgrest.auth(access_token)
     query = (
         user_client
         .table("user_books")
@@ -105,8 +106,24 @@ def get_bookshelf(*, user_id: str, access_token: str):
         .eq("user_id", user_id)
     )
 
-    user_client.postgrest.auth(access_token)
-
     response = query.order("updated_at", desc=True).execute
 
     return response.data
+
+def set_favorite_book(
+        *, user_id: str, book_id: UUID, is_favorite: bool, access_token: str
+        
+):
+    user_client.postgrest.auth(access_token)
+
+    query = (
+        user_client 
+        .table("user_books")
+        .update({"is_favorite": is_favorite})
+        .eq("user_id", user_id)
+        .eq("book_id", str(book_id))
+        .select("*, books(*)")
+        .execute()
+    )
+
+    return query.data[0] if query.data else None
