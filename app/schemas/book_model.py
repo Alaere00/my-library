@@ -69,10 +69,11 @@ class AuthorInfo(BaseModel):
     bio: Optional[str] = None
     books_count: Optional[int] = None
     cached_image: Optional[CachedImage] = None
-    contributions: list[Contribution]
+    contributions: Optional[Contribution] = None
     identifiers: Optional[Dict[str, list[str]]] = None
     image_id: Optional[int] = None
     is_bipoc: Optional[bool] = None
+    books: list[BookInfo] = []
     name: str 
 
 
@@ -80,6 +81,15 @@ class BookSearchResult(BaseModel):
   found: Optional[int] = None
   hits: list[BookInfo] = None
   page: int = None
+  per_page: int = None
+  total_pages: int = None
+
+
+class AuthorSearchResult(BaseModel):
+    author: AuthorInfo
+    page: int = None
+    per_page: int = None
+    total: int = None
 
 
 class Publisher(BaseModel):

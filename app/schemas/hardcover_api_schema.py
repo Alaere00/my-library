@@ -56,7 +56,7 @@ query GetBookInfoByTitle($title: String!){
 
 author_query = """
 query GetBookInfoByAuthor($slug: String!){
-    authors(where: {slug: {_eq: $slug}}, limit: 10){
+    authors(where: {slug: {_eq: $slug}}){
         alternate_names	
         bio	
         books_count
@@ -66,12 +66,25 @@ query GetBookInfoByAuthor($slug: String!){
         image_id	
         is_bipoc	
         name
-        name_personal	
-        contributions(where: {contributable_type: {_eq: "Book"}}){
+        name_personal
+        contributions_aggregate(where: {contributable_type: {_eq: "Book"}}){
+            aggregate { count }
+        }
+        contributions(where: {
+            contributable_type: {_eq: "Book"}
+            contributor_role: {slug: {_eq: "author"}}
+        }
+            order_by: {book: {users_count: desc}}
+        ){
             book {
+                id
                 title
+                slug
+                subtitle
                 description
                 release_year
+                cached_image
+                cached_tags
                 pages
 
             }

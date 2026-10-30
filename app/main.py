@@ -1,13 +1,15 @@
 import json
+import math
 from uuid import UUID
 import httpx
-from fastapi import FastAPI, HTTPException, Depends, Header, status
+from fastapi import FastAPI, HTTPException, Depends, Header, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from app.schemas.book_model import AddToShelfRequest, AuthorInfo, BookInfo, BookSearchResult, Edition
+from app.book_helpers import to_book_info
+from app.schemas.book_model import AddToShelfRequest, AuthorInfo, AuthorSearchResult, BookInfo, BookSearchResult, Edition
 from app.schemas.bookshelf_model import FavoriteUpdate, Status
 from app.settings import settings
-from app.schemas.auth_model import UserProfile
+from app.schemas.auth_model import LoginCredentials, UserProfile
 from app.schemas.hardcover_api_schema import author_query, title_query, search_query, isbn_query, to_slug
 from app.dbs.supabase_db import get_bookshelf, set_book_status_in_bookshelf, set_favorite_book, user_sign_up, user_login, create_user_profile, get_current_user_id
 # from app.services.embeddings.embeddings import get_book_embeddings
@@ -16,8 +18,8 @@ import isbnlib
 
 
 origins = [
-    "http://localhost:5174",
-    "http://127.0.0.1:5174",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
 ]
 
 
@@ -38,7 +40,7 @@ def read_root():
 
 
 @app.get("/search/general", response_model=BookSearchResult)
-async def search_books(query: str, page: int = 1, per_page: int = 100) -> BookSearchResult:
+async def search_books(query: str, page: int = Query(1, ge=1), per_page: int = Query(20, ge=1, le=50)) -> BookSearchResult:
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             response = await client.post(settings.hardcover_api_url, 
@@ -53,11 +55,10 @@ async def search_books(query: str, page: int = 1, per_page: int = 100) -> BookSe
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Error")
     data = response.json()
     res = data["data"]["search"]["results"]
-    print(res)
     if isinstance(res, str):
         res = json.loads(res)
 
-    return BookSearchResult(found=res["found"], hits=[BookInfo.model_validate(hit["document"]) for hit in res["hits"]], page=res["page"])
+    return BookSearchResult(found=res["found"], hits=[BookInfo.model_validate(hit["document"]) for hit in res["hits"]], page=res["page"], per_page=per_page, total_pages=math.ceil(res["found"]/per_page))
 
 
 @app.get("/search/title/{book_title}", response_model=list[BookInfo])
@@ -76,25 +77,43 @@ async def get_book_by_title(book_title: str) -> list[BookInfo]:
     if response.status_code != 200:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail={e})
     data = response.json()
-    print(data)
     res = [BookInfo(**b) for b in data["data"]["books"]]
     return res
 
 
-@app.get("/search/author/{author_name}", response_model=AuthorInfo)
-async def get_author_info(author_name: str):
+@app.get("/search/author/{author_name}", response_model=AuthorSearchResult)
+async def get_author_info(author_name: str, page: int = Query(1, ge=1), per_page: int = Query(20, ge=1, le=50)):
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             response = await client.post(settings.hardcover_api_url, 
                 json={"query": author_query , "variables": {"slug": to_slug(author_name)}},
                 headers={ "Authorization": f"Bearer {settings.hardcover_api_key}", "content-type": "application/json"})
                 
-            if response.status_code == 200:
-                data = response.json()
-            return AuthorInfo(**data["data"]["authors"][0]) if data["data"]["authors"] else None
+
+        response.raise_for_status()
+ 
+
     except httpx.RequestError as e:
-        print(f"Request error: {e}")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Hardcover API is unavailable: {e}")
+    
+    data = response.json()
+    print(data)
+    authors = data["data"]["authors"]
+    if not authors:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Author not found")
+    
+    author = authors[0]
+    seen, books = set(), []
+
+    for c in author.pop("contributions"):
+        b = c["book"]
+        if b["id"] not in seen:
+            seen.add(b["id"])
+            books.append(to_book_info(b))
+    total = len(books)
+    start = (page - 1) * per_page
+    page_books = books[start: start + per_page]
+    return AuthorSearchResult(author=AuthorInfo(**author, books=page_books), page=page, per_page=per_page, total=total)
 
 
 @app.get("/search/isbn/{isbn}")
@@ -181,8 +200,8 @@ async def create_new_user(email: str, password: str):
 
 
 @app.post('/my-bookshelf/login')
-async def login_User(email: str, password: str):
-    logged_in = await user_login(email, password)
+async def login_User(login_credentials: LoginCredentials):
+    logged_in = await user_login(login_credentials)
     return logged_in
 
 
