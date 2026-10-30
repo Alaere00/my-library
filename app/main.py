@@ -61,24 +61,28 @@ async def search_books(query: str, page: int = Query(1, ge=1), per_page: int = Q
     return BookSearchResult(found=res["found"], hits=[BookInfo.model_validate(hit["document"]) for hit in res["hits"]], page=res["page"], per_page=per_page, total_pages=math.ceil(res["found"]/per_page))
 
 
-@app.get("/search/title/{book_title}", response_model=list[BookInfo])
-async def get_book_by_title(book_title: str) -> list[BookInfo]:
+@app.get("/search/title/{book_title}", response_model=BookSearchResult)
+async def get_book_by_title(book_title: str, page: int = Query(1, ge=1), per_page: int = Query(20, ge=1, le=50)) -> BookSearchResult:
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             response = await client.post(settings.hardcover_api_url, 
-                json={"query": title_query , "variables": {"title": book_title}},
+                json={"query": title_query , "variables": {"title": book_title, "page": page, "per_page": per_page}},
                 headers={ "Authorization": f"Bearer {settings.hardcover_api_key}", "content-type": "application/json"})
                 
     except httpx.RequestError as e:
-
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Hardcover API is unavailable: {e}")
     
 
     if response.status_code != 200:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail={e})
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Hardcover returned {response.status_code}: {response.text[:500]}")
+
     data = response.json()
-    res = [BookInfo(**b) for b in data["data"]["books"]]
-    return res
+    res = data["data"]["search"]["results"]
+    if isinstance(res, str):
+        res = json.loads(res)
+
+    return BookSearchResult(found=res["found"], hits=[BookInfo.model_validate(hit["document"]) for hit in res["hits"]], page=res["page"], per_page=per_page, total_pages=math.ceil(res["found"]/per_page))
+
 
 
 @app.get("/search/author/{author_name}", response_model=AuthorSearchResult)
@@ -97,7 +101,6 @@ async def get_author_info(author_name: str, page: int = Query(1, ge=1), per_page
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Hardcover API is unavailable: {e}")
     
     data = response.json()
-    print(data)
     authors = data["data"]["authors"]
     if not authors:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Author not found")

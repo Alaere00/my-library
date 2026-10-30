@@ -89,7 +89,7 @@ class AuthorSearchResult(BaseModel):
     author: AuthorInfo
     page: int = None
     per_page: int = None
-    total: int = None
+    found: int = None
 
 
 class Publisher(BaseModel):
