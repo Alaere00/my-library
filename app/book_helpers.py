@@ -7,7 +7,8 @@ def to_book_info(b: dict) -> BookInfo:
     def names(category: str) -> list[str]:
         return [t["tag"] for t in tags.get(category, []) if t.get("tag")]
     
-    contributors = b.get("cached_contributors") or []
+    print(b.get("contributions") )
+    contributors = b.get("contributions") or []
 
     return BookInfo(
         id=b["id"],
@@ -20,8 +21,7 @@ def to_book_info(b: dict) -> BookInfo:
         content_warnings=names("Content Warning"),
         tags=names("Tag"),
         author_names=[
-            c["author"]["name"] for c in contributors if c.get("author") and not c.get("contribution")
-        ],
+            c["author"]["name"] for c in contributors if c.get("author")],
         pages=b.get("pages"),
         release_year=b.get("release_year"),
         rating=b.get("rating"),

@@ -113,37 +113,34 @@ async def get_author_info(author_name: str, page: int = Query(1, ge=1), per_page
     total = len(books)
     start = (page - 1) * per_page
     page_books = books[start: start + per_page]
-    return AuthorSearchResult(author=AuthorInfo(**author, books=page_books), page=page, per_page=per_page, total=total)
+    return AuthorSearchResult(author=AuthorInfo(**author, books=page_books), page=page, per_page=per_page, found=total)
 
 
-@app.get("/search/isbn/{isbn}")
+@app.get("/search/isbn/{isbn}", response_model=BookSearchResult)
 async def get_book_info_by_isbn(isbn: str):
-    field = ""
     isbn = isbnlib.canonical(isbn)
 
-    if isbnlib.is_isbn10(isbn):
-        field = "isbn_10"
-    elif isbnlib.is_isbn13(isbn):
-        field = "isbn_13"
-
-    query = isbn_query.replace("FIELD", field)
+    if not (isbnlib.is_isbn10(isbn) or isbnlib.is_isbn13(isbn)):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Invalid ISBN")
 
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             response = await client.post(settings.hardcover_api_url, 
-                json={"query": query , "variables": {"isbn": isbn }},
+                json={"query": isbn_query , "variables": {"isbn": isbn }},
                 headers={ "Authorization": f"Bearer {settings.hardcover_api_key}", "content-type": "application/json"})
                 
-            data = response.json()
 
-            if response.status_code == 200 and data:
-                return [Edition(**b) for b in data["data"]["editions"]]
-
-            return []
     except httpx.RequestError as e:
-        print(f"Request error: {e}")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Hardcover API is unavailable: {e}")
+    
+    if response.status_code != 200:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail="Hardcover API error")
 
+    payload = response.json()
+
+    books = (payload.get("data") or {}).get("books")
+
+    return BookSearchResult(found=len(books), hits=[to_book_info(b) for b in books], page=1, per_page=len(books), total_pages=1)
 
 # @app.get("/books", response_model=BookResp)
 # async def get_book_info_by_author(author_name: Optional[str] = Query(None, description="Search by author name"), book_title: Optional[str] = Query(None, description="Search by book title")):

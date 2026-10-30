@@ -94,36 +94,37 @@ query GetBookInfoByAuthor($slug: String!){
 """
 
 isbn_query = """
-query GetEditionByISBN($isbn: String!) {
-  editions(where: {FIELD: {_eq: $isbn }}) {
-      id
-      title
-      subtitle
-      isbn_13
-      isbn_10
-      asin
-      pages
-      release_date
-      physical_format
-      publisher {
-          name
+query GetBookByISBN($isbn: String!) {
+  books(
+    where: {
+      editions: {
+        _or: [
+          { isbn_13: { _eq: $isbn } },
+          { isbn_10: { _eq: $isbn } }
+        ]
       }
-      book {
-          id
-          title
-          rating
-          contributions {
-              author {
-                  name
-              }
-          }
-      }
-      language {
-          language
-      }
-      reading_format {
-          format
-      }
+    }
+    order_by: { users_count: desc }
+    limit: 1
+  ) {
+    id
+    title
+    subtitle
+    description
+    pages
+    rating
+    ratings_count
+    release_date
+    release_year
+    cached_image
+    cached_tags
+    contributions { contribution author { id name } }
+    book_series(order_by: { featured: desc }) {
+      position
+      series { id name }
+    }
+    book_characters { character { id name } }
+    editions { isbn_10 isbn_13 reading_format { format } }
   }
 }
 """
