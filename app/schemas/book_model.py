@@ -83,6 +83,7 @@ class BookSearchResult(BaseModel):
   page: int = None
   per_page: int = None
   total_pages: int = None
+  author: Optional[AuthorInfo] = None
 
 
 class AuthorSearchResult(BaseModel):

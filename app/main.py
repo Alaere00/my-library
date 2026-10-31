@@ -85,12 +85,12 @@ async def get_book_by_title(book_title: str, page: int = Query(1, ge=1), per_pag
 
 
 
-@app.get("/search/author/{author_name}", response_model=AuthorSearchResult)
+@app.get("/search/author/{author_name}", response_model=BookSearchResult)
 async def get_author_info(author_name: str, page: int = Query(1, ge=1), per_page: int = Query(20, ge=1, le=50)):
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             response = await client.post(settings.hardcover_api_url, 
-                json={"query": author_query , "variables": {"slug": to_slug(author_name)}},
+                json={"query": author_query , "variables": {"slug": to_slug(author_name), "limit": per_page, "offset": (page - 1) * per_page}},
                 headers={ "Authorization": f"Bearer {settings.hardcover_api_key}", "content-type": "application/json"})
                 
 
@@ -100,23 +100,14 @@ async def get_author_info(author_name: str, page: int = Query(1, ge=1), per_page
     except httpx.RequestError as e:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Hardcover API is unavailable: {e}")
     
-    data = response.json()
-    authors = data["data"]["authors"]
+    data = response.json()["data"]
+    authors = data["authors"]
     if not authors:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Author not found")
-    
-    author = authors[0]
-    seen, books = set(), []
 
-    for c in author.pop("contributions"):
-        b = c["book"]
-        if b["id"] not in seen:
-            seen.add(b["id"])
-            books.append(to_book_info(b))
-    total = len(books)
-    start = (page - 1) * per_page
-    page_books = books[start: start + per_page]
-    return AuthorSearchResult(author=AuthorInfo(**author, books=page_books), page=page, per_page=per_page, found=total)
+    total = data["books_aggregate"]["aggregate"]["count"]
+
+    return BookSearchResult(hits=[to_book_info(b, [authors[0]["name"]]) for b in data["books"]], author=AuthorInfo(**data["authors"][0]), page=page, per_page=per_page, found=total, total_pages=math.ceil(total/ per_page) if total else 0)
 
 
 @app.get("/search/isbn/{isbn}", response_model=BookSearchResult)
