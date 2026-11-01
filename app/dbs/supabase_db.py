@@ -60,6 +60,7 @@ async def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depend
         )
 
 async def create_user_profile(id, first_name, last_name):
+    
     user_profile = user_client.table('profiles').upsert({
         'id': id,
         'first_name': first_name,
@@ -91,6 +92,18 @@ def set_book_status_in_bookshelf(*, user_id: str, catalog_book: Dict[str, Any], 
         .execute()
         .data
         )
+
+
+def get_bookshelf(*, user_id: str, access_token: str):
+    return (
+        user_db(access_token)
+        .table("user_books")
+        .select(f"*, books({BOOK_COLS})")
+        .eq("user_id", user_id)
+        .order("updated_at", desc=True)
+        .execute()
+        .data
+    )
     
 
 def set_ratings_in_bookshelf(*, user_id: str, access_token: str, rating: int | float| None, provider_book_id: str):
@@ -117,33 +130,29 @@ def set_ratings_in_bookshelf(*, user_id: str, access_token: str, rating: int | f
     
     return rows[0] if rows else None
 
-  
-def get_bookshelf(*, user_id: str, access_token: str):
-    return (
-        user_db(access_token)
-        .table("user_books")
-        .select(f"*, books({BOOK_COLS})")
-        .eq("user_id", user_id)
-        .order("updated_at", desc=True)
+
+def set_favorite_book( *, user_id: str, provider_book_id: str, is_favorite: bool, access_token: str):
+    db = user_db(access_token)
+    book = (
+        catalog_client.table("books")
+        .select("id")
+        .eq("provider", "hardcover")
+        .eq("provider_book_id", provider_book_id)
+        .limit(1)
         .execute()
         .data
     )
 
+    if not book: 
+        return None
 
-def set_favorite_book(
-        *, user_id: str, book_id: UUID, is_favorite: bool, access_token: str
-        
-):
-    db = user_db(access_token)
-
-    query = (
-        user_client 
-        .table("user_books")
+    rows = (
+        db .table("user_books")
         .update({"is_favorite": is_favorite})
         .eq("user_id", user_id)
-        .eq("book_id", str(book_id))
-        .select("*, books(*)")
+        .eq("book_id", book[0]["id"])
         .execute()
+        .data
     )
 
-    return query.data[0] if query.data else None
+    return rows[0] if rows else None

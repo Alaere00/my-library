@@ -4,3 +4,7 @@ class UserProfile(BaseModel):
     user_id: str
     first_name: str
     last_name: str 
+
+class LoginCredentials(BaseModel):
+    email: str
+    password: str
