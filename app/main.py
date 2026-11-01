@@ -1,17 +1,19 @@
 import json
 import math
+from typing import Optional
+from pydantic import Field
 from uuid import UUID
 import httpx
 from fastapi import FastAPI, HTTPException, Depends, Header, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from app.book_helpers import book_to_row, to_book_info
-from app.schemas.book_model import AddToShelfRequest, AuthorInfo, BookInfo, BookSearchResult
+from app.schemas.book_model import AddToShelfRequest, AuthorInfo, BookInfo, BookSearchResult, Ratings
 from app.schemas.bookshelf_model import FavoriteUpdate
 from app.settings import settings
 from app.schemas.auth_model import LoginCredentials, UserProfile
 from app.schemas.hardcover_api_schema import author_query, title_query, search_query, isbn_query, to_slug
-from app.dbs.supabase_db import get_bookshelf, set_book_status_in_bookshelf, set_favorite_book, user_sign_up, user_login, create_user_profile, get_current_user_id
+from app.dbs.supabase_db import get_bookshelf, set_book_status_in_bookshelf, set_favorite_book, set_ratings_in_bookshelf, user_sign_up, user_login, create_user_profile, get_current_user_id
 # from app.services.embeddings.embeddings import get_book_embeddings
 from app.temp.temp_data import favorites
 import isbnlib 
@@ -220,12 +222,27 @@ def set_book_status(request: AddToShelfRequest, credentials: HTTPAuthorizationCr
     )
 
 
+@app.patch("/my-bookshelf/{provider_book_id}/rating")
+def rate_book(provider_book_id: str, rating: Ratings, credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme), user_id: str = Depends(get_current_user_id)):
+    row = set_ratings_in_bookshelf(
+        provider_book_id=provider_book_id,
+        user_id=user_id,
+        rating=rating.rating,
+        access_token=credentials.credentials
+    )
+
+    if not row:
+        raise HTTPException(404, "Book is not on your shelf")
+    return row
+
+
 @app.get("/my-bookshelf")
 def get_user_bookshelf(user_ID: str = Depends(get_current_user_id), credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)):
     return get_bookshelf(
         user_id=user_ID,
         access_token=credentials.credentials
     )
+
 
 @app.patch("/my-bookshelf/{book_id}/favorite")
 def update_favorite_status(book_id: UUID, update: FavoriteUpdate, user_id: str = Depends(get_current_user_id), credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)):

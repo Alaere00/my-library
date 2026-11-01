@@ -93,11 +93,33 @@ def set_book_status_in_bookshelf(*, user_id: str, catalog_book: Dict[str, Any], 
         )
     
 
-  
-    
+def set_ratings_in_bookshelf(*, user_id: str, access_token: str, rating: int | float| None, provider_book_id: str):
+    db = user_db(access_token)
+    book = (
+        catalog_client.table("books")
+        .select("id")
+        .eq("provider", "hardcover")
+        .eq("provider_book_id", provider_book_id)
+        .limit(1)
+        .execute()
+        .data
+    )
+    if not book: 
+        return None
 
+    rows = (db.table("user_books")
+        .update({"rating": rating})
+        .eq("user_id", user_id)
+        .eq("book_id", book[0]["id"])
+        .execute()
+        .data
+        )
+    
+    return rows[0] if rows else None
+
+  
 def get_bookshelf(*, user_id: str, access_token: str):
-    query = (
+    return (
         user_db(access_token)
         .table("user_books")
         .select(f"*, books({BOOK_COLS})")
@@ -107,15 +129,12 @@ def get_bookshelf(*, user_id: str, access_token: str):
         .data
     )
 
-    response = query.order("updated_at", desc=True).execute
-
-    return response.data
 
 def set_favorite_book(
         *, user_id: str, book_id: UUID, is_favorite: bool, access_token: str
         
 ):
-    user_client.postgrest.auth(access_token)
+    db = user_db(access_token)
 
     query = (
         user_client 

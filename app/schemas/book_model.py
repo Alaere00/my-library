@@ -1,5 +1,5 @@
 from typing import Any, Dict, List, Literal, Optional
-from pydantic import BaseModel, computed_field, field_validator
+from pydantic import BaseModel, Field, computed_field, field_validator
 
 from app.schemas.bookshelf_model import Status
 
@@ -123,6 +123,8 @@ class AddToShelfRequest(BaseModel):
     book: BookInfo
     status: Status
 
+class Ratings(BaseModel):
+    rating: Optional[int | float] = Field(None, ge=1, le=5)
 #########################################
 
 class Docs(BaseModel):
