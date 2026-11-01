@@ -5,9 +5,9 @@ import httpx
 from fastapi import FastAPI, HTTPException, Depends, Header, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from app.book_helpers import to_book_info
-from app.schemas.book_model import AddToShelfRequest, AuthorInfo, AuthorSearchResult, BookInfo, BookSearchResult, Edition
-from app.schemas.bookshelf_model import FavoriteUpdate, Status
+from app.book_helpers import book_to_row, to_book_info
+from app.schemas.book_model import AddToShelfRequest, AuthorInfo, BookInfo, BookSearchResult
+from app.schemas.bookshelf_model import FavoriteUpdate
 from app.settings import settings
 from app.schemas.auth_model import LoginCredentials, UserProfile
 from app.schemas.hardcover_api_schema import author_query, title_query, search_query, isbn_query, to_slug
@@ -211,11 +211,11 @@ async def update_user_profile(update_data: UserProfile, user_id: str = Depends(g
         raise HTTPException(status_code=400, detail=e)
     
 @app.post("/my-bookshelf/set-status")
-def set_book_status(request: AddToShelfRequest, user_ID: str = Depends(get_current_user_id), credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)):
+def set_book_status(request: AddToShelfRequest, credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme), user_ID: str = Depends(get_current_user_id)):
     return set_book_status_in_bookshelf(
-        book=request.book,
-        status=request.status,
         user_id=user_ID,
+        catalog_book=book_to_row(request.book),
+        status=request.status,
         access_token=credentials.credentials
     )
 

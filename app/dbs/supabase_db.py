@@ -3,14 +3,22 @@ from uuid import UUID
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi import Depends, HTTPException
 from supabase import create_client, Client 
+from app.schemas.auth_model import LoginCredentials
 from app.schemas.bookshelf_model import Status
 from app.settings import settings
 from typing import Dict, Any
 
 
-user_client: Client = create_client(settings.supabase_url, settings.supabase_api_key, None)
+user_client: Client = create_client(settings.supabase_url, settings.supabase_api_key)
 catalog_client: Client = create_client(settings.supabase_url, settings.supabase_service_role_key)
 security = HTTPBearer()
+
+BOOK_COLS = "id,provider_book_id,title,subtitle,authors,description,genres,moods,tags,image,pages,release_year,rating"
+
+def user_db(acecss_token: str) -> Client:
+    c = create_client(settings.supabase_url, settings.supabase_api_key)
+    c.postgrest.auth(acecss_token)
+    return c
 
 async def user_sign_up(username: str, password: str):
     user_data = user_client.auth.sign_up({
@@ -24,11 +32,11 @@ async def user_sign_up(username: str, password: str):
     return user_data
 
 
-async def user_login(username: str, password):
+async def user_login(credentials: LoginCredentials):
     try: 
         response = user_client.auth.sign_in_with_password({
-            'email': username,
-            'password': password,
+            'email': credentials.email,
+            'password': credentials.password,
             })
 
         session = response.session
@@ -62,48 +70,41 @@ async def create_user_profile(id, first_name, last_name):
 
 
 def set_book_status_in_bookshelf(*, user_id: str, catalog_book: Dict[str, Any], status: Status, access_token: str) -> dict[str, Any]:
-    user_client.postgrest.auth(access_token)
-    
     stored_book = (
-        catalog_client
-        .table("books")
-        .upsert(
-            catalog_book,
-            on_conflict="provider,provider_book_id",
-        )
-        .select("id")
+        catalog_client.table("books")
+        .upsert(catalog_book, on_conflict="provider,provider_book_id")
+        .execute()
+        .data[0]
+    )
+
+    db = user_db(access_token)
+    db.table("user_books").upsert(
+        {"user_id": user_id, "book_id": stored_book["id"], "status" : status.value},
+        on_conflict="user_id,book_id"
+    ).execute()
+
+    return (db.table("user_books")
+        .select(f"*, books({BOOK_COLS})")
+        .eq("user_id", user_id)
+        .eq("book_id", stored_book["id"])
         .single()
         .execute()
         .data
-    )
-
-    save_shelf_entry = (
-        user_client
-        .table("user_books")
-        .upsert(
-            {
-                "user_id": user_id,
-                "book_id": stored_book["id"],
-                "status": status.value
-            },
-            on_conflict="user_id,book_id"
         )
-        .select("*, books(*)")
-        .single()
-        .execute()
-        .data
-    )
+    
 
-    return save_shelf_entry
+  
     
 
 def get_bookshelf(*, user_id: str, access_token: str):
-    user_client.postgrest.auth(access_token)
     query = (
-        user_client
+        user_db(access_token)
         .table("user_books")
-        .select("*, books(*)")
+        .select(f"*, books({BOOK_COLS})")
         .eq("user_id", user_id)
+        .order("updated_at", desc=True)
+        .execute()
+        .data
     )
 
     response = query.order("updated_at", desc=True).execute

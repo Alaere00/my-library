@@ -8,6 +8,7 @@ query Search($q: String!, $page: Int!, $per_page: Int!){
 }
 """
 
+
 title_query = """
 query SearchBookByTitle($title: String!, $page: Int!, $per_page: Int!){
     search(
@@ -23,6 +24,7 @@ query SearchBookByTitle($title: String!, $page: Int!, $per_page: Int!){
     }
 }
 """
+
 
 author_query = """
 query GetBookInfoByAuthor($slug: String!, $limit: Int!, $offset: Int!) {
@@ -44,44 +46,6 @@ query GetBookInfoByAuthor($slug: String!, $limit: Int!, $offset: Int!) {
 }
 """
 
-# author_query = """
-# query GetBookInfoByAuthor($slug: String!){
-#     authors(where: {slug: {_eq: $slug}}){
-#         alternate_names	
-#         bio	
-#         books_count
-#         cached_image	
-#         gender_id	
-#         identifiers	
-#         image_id	
-#         is_bipoc	
-#         name
-#         name_personal
-#         contributions_aggregate(where: {contributable_type: {_eq: "Book"}}){
-#             aggregate { count }
-#         }
-#         contributions(where: {
-#             contributable_type: {_eq: "Book"}
-#             contributor_role: {slug: {_eq: "author"}}
-#         }
-#             order_by: {book: {users_count: desc}}
-#         ){
-#             book {
-#                 id
-#                 title
-#                 slug
-#                 subtitle
-#                 description
-#                 release_year
-#                 cached_image
-#                 cached_tags
-#                 pages
-
-#             }
-#         }
-#     }
-# }
-# """
 
 isbn_query = """
 query GetBookByISBN($isbn: String!) {

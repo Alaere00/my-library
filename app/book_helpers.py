@@ -28,3 +28,25 @@ def to_book_info(b: dict, fallback_authors: str = None) -> BookInfo:
         release_year=b.get("release_year"),
         rating=b.get("rating"),
     )
+
+
+def book_to_row(b: BookInfo) -> dict:
+
+    return {
+        "provider": "hardcover",
+        "provider_book_id": str(b.id),
+        "title": b.title,
+        "subtitle": b.subtitle,
+        "authors": b.author_names or [],
+        "description": b.description,
+        "genres": b.genres or [],
+        "moods": b.moods or [],
+        "tags": b.tags or [],
+        "content_warnings": b.content_warnings or [],
+        "series_names": b.series_names or [],
+        "image": b.image.model_dump(exclude_none=True) if b.image else None,
+        "pages": b.pages,
+        "release_year": b.release_year,
+        "rating": b.rating,
+        "ratings_count": b.ratings_count,
+    }
