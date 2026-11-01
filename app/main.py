@@ -12,7 +12,6 @@ from app.schemas.auth_model import LoginCredentials, UserProfile
 from app.schemas.hardcover_api_schema import author_query, title_query, search_query, isbn_query, to_slug
 from app.dbs.supabase_db import get_bookshelf, set_book_status_in_bookshelf, set_favorite_book, set_ratings_in_bookshelf, user_sign_up, user_login, create_user_profile, get_current_user_id
 # from app.services.embeddings.embeddings import get_book_embeddings
-from app.temp.temp_data import favorites
 import isbnlib 
 
 
@@ -211,8 +210,8 @@ def update_favorite_status(provider_book_id: str, update: FavoriteUpdate, user_i
     # Share library with friends?
 
 
-@app.post("/my-shelf/recommendations")
-def mock_book_recommendations():
-    for book in favorites:
-        print(book.model_dump())
+# @app.post("/my-shelf/recommendations")
+# def mock_book_recommendations():
+#     for book in favorites:
+#         print(book.model_dump())
 
