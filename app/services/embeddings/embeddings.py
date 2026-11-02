@@ -11,3 +11,27 @@ def build_text(b: dict) -> str:
 
 def embed_text(texts: list[str]):
     return model.encode(texts, normalize_embeddings=True)
+
+def _weight(row: dict) -> float:
+    rating = row.get("rating")
+
+    if row["status"] == "did_not_complete" or (rating is not None and rating < 2):
+        return 0.0
+
+    # liked = row["is_favorite"] or row["status"] == "completed" or (rating or 0) >= 4
+
+    # if not liked:
+    #     return 0.0
+
+
+    w = 1.0
+    if row["status"] == "completed":
+        w+= 1.0
+    if row["is_favorite"]:
+        w+= 2.0
+    if (rating or 0) >= 4:
+        w+= 1.0
+
+    return w
+
+

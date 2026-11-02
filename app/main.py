@@ -96,7 +96,7 @@ async def get_author_info(author_name: str, page: int = Query(1, ge=1), per_page
  
 
     except httpx.RequestError as e:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Hardcover API is unavailable: {e}")
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=f"Hardcover API is unavailable: {e}")
     
     data = response.json()["data"]
     authors = data["authors"]
