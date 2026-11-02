@@ -1,8 +1,7 @@
 from multiprocessing import AuthenticationError
-from uuid import UUID
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi import Depends, HTTPException
-from supabase import create_client, Client 
+from fastapi import Depends, HTTPException, Response
+from supabase import AuthApiError, create_client, Client 
 from app.schemas.auth_model import LoginCredentials
 from app.schemas.bookshelf_model import Status
 from app.settings import settings
@@ -15,10 +14,44 @@ security = HTTPBearer()
 
 BOOK_COLS = "id,provider_book_id,title,subtitle,authors,description,genres,moods,tags,image,pages,release_year,rating"
 
-def user_db(acecss_token: str) -> Client:
+def user_db(access_token: str, refresh_token: str = None) -> Client:
     c = create_client(settings.supabase_url, settings.supabase_api_key)
-    c.postgrest.auth(acecss_token)
+    c.postgrest.auth(access_token)
+
+    if access_token:
+        c.auth.set_session(access_token, refresh_token or "")
     return c
+
+
+async def get_secure_data_or_refresh(response: Response, access_token: str, refresh_token: str):
+    supabase = user_db(access_token, refresh_token)
+
+    try:
+        result = supabase.table("profiles").select("*").execute()
+        return { "data": result.data, "new_tokens": None}
+    
+    except AuthApiError as e:
+        if "token is expired" in str(e).lower() and refresh_token:
+            try:
+                refresh_response = supabase.auth.refresh_session(refresh_token)
+                new_access = refresh_response.session.access_token
+                new_refresh = refresh_response.session.refresh_token
+
+                supabase = user_db(new_access, new_refresh)
+
+                retry_result = supabase.table("profiles").select("*").execute()
+
+                response.headers["X-New-Access-Token"] = new_access
+                response.headers["X-New-Refresh-Token"] = new_refresh
+
+                return {"data": retry_result.data}
+            
+            except AuthApiError as refresh_err:
+                raise HTTPException(status_code=401, detail="Session completely expired. Please log in again.")
+        
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 
 async def user_sign_up(username: str, password: str):
     user_data = user_client.auth.sign_up({
@@ -46,6 +79,10 @@ async def user_login(credentials: LoginCredentials):
         
     except AuthenticationError as e:
         raise HTTPException(status_code=400, detail={ user: None, session: None, e: str(e) })
+
+
+async def user_logout():
+    return user_client.auth.sign_out()
 
 
 async def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depends(security)):

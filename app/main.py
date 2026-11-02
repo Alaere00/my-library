@@ -1,16 +1,17 @@
 import json
 import math
 import httpx
-from fastapi import FastAPI, HTTPException, Depends, Header, Query, status
+from fastapi import FastAPI, HTTPException, Depends, Header, Query, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from app.book_helpers import book_to_row, to_book_info
 from app.schemas.book_model import AddToShelfRequest, AuthorInfo, BookInfo, BookSearchResult, Ratings
 from app.schemas.bookshelf_model import FavoriteUpdate
+from app.services.recommendation.recommendations import get_recommendation
 from app.settings import settings
 from app.schemas.auth_model import LoginCredentials, UserProfile
 from app.schemas.hardcover_api_schema import author_query, title_query, search_query, isbn_query, to_slug
-from app.dbs.supabase_db import get_bookshelf, set_book_status_in_bookshelf, set_favorite_book, set_ratings_in_bookshelf, user_sign_up, user_login, create_user_profile, get_current_user_id
+from app.dbs.supabase_db import get_bookshelf, get_secure_data_or_refresh, set_book_status_in_bookshelf, set_favorite_book, set_ratings_in_bookshelf, user_logout, user_sign_up, user_login, create_user_profile, get_current_user_id
 # from app.services.embeddings.embeddings import get_book_embeddings
 import isbnlib 
 
@@ -134,7 +135,18 @@ async def get_book_info_by_isbn(isbn: str):
 
     return BookSearchResult(found=len(books), hits=[to_book_info(b) for b in books], page=1, per_page=len(books), total_pages=1)
   
+@app.get('/my-bookshelf/profile')
+async def get_user_profile(response: Response, authorization: str = Header(None), x_refresh_token: str = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=401, 
+            detail="Missing or malformed Authorization header"
+        )
     
+    access_token = authorization.split(" ")[1]
+    return await get_secure_data_or_refresh(response, access_token=access_token, refresh_token=x_refresh_token)
+
+
 @app.post('/my-bookshelf/sign-up')
 async def create_new_user(email: str, password: str):
     new_user = await user_sign_up(email, password)
@@ -142,9 +154,14 @@ async def create_new_user(email: str, password: str):
 
 
 @app.post('/my-bookshelf/login')
-async def login_User(login_credentials: LoginCredentials):
+async def login_user(login_credentials: LoginCredentials):
     logged_in = await user_login(login_credentials)
     return logged_in
+
+
+@app.post('/my-bookshelf/logout')
+async def logout_user():
+    return await user_logout()
 
 
 @app.post('/my-bookshelf/update-profiles')
@@ -210,8 +227,8 @@ def update_favorite_status(provider_book_id: str, update: FavoriteUpdate, user_i
     # Share library with friends?
 
 
-# @app.post("/my-shelf/recommendations")
-# def mock_book_recommendations():
-#     for book in favorites:
-#         print(book.model_dump())
+@app.post("/my-bookshelf/recommendations", response_model=BookSearchResult)
+def mock_book_recommendations(limit: int = Query(25, ge=1, le=50), user_id: str = Depends(get_current_user_id)):
+    return get_recommendation(user_id, limit)
+
 

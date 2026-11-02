@@ -5,22 +5,28 @@ from fastapi import Query
 from app.schemas.book_model import BookInfo
 from app.schemas.bookshelf_model import Status
 from app.schemas.hardcover_api_schema import search_query
-from app import settings
+from app.settings import settings
 
 
 
-def search_hardcover(query: str, per_page: int = Query(20, ge=1, le=50)) -> list[BookInfo]:
-
+def search_hardcover(query: str, per_page: int = 25) -> list[BookInfo]:
     r = httpx.post(settings.hardcover_api_url, 
             json={"query": search_query , "variables": {"q": query, "page": 1, "per_page": per_page }},
             headers={ "Authorization": f"Bearer {settings.hardcover_api_key}", "content-type": "application/json"}, timeout=10.0)
                 
+    r.raise_for_status()
     data = r.json()
     res = data["data"]["search"]["results"]
     if isinstance(res, str):
         res = json.loads(res)
 
-    return BookInfo.model_validate([hit["document"] for hit in res["hits"]])
+    books = []
+    for h in res.get("hits", []):
+            try:
+                books.append(BookInfo.model_validate(h["document"]))
+            except Exception as e:
+                print("skip bad doc:", e)
+    return books
 
 
 def search_queries(liked: list[dict]) -> list[str]:

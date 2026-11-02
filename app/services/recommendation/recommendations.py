@@ -1,27 +1,30 @@
 import numpy as np
-from sympy import per
-
+import json
 from app.book_helpers import book_to_row
 from app.schemas.book_model import BookSearchResult
 from app.schemas.book_model import BookSearchResult
-from candidates import search_hardcover, search_queries
-from embeddings.embeddings import build_text, embed_text, _weight
+from app.services.recommendation.candidates import search_hardcover, search_queries
+from app.services.embeddings.embeddings import build_text, embed_text, weight
 from app.dbs.supabase_db import catalog_client
+
+def _vec(v):
+    return np.array(json.loads(v) if isinstance(v, str) else v, dtype=np.float64)
+
 
 def get_recommendation(user_id: str, limit: int = 25) -> list[dict]:
     shelf = (
         catalog_client.table("user_books")
-        .select("status, is_favorite, rating, books(provider_book_id, authors, genres, moods, embeddings, description, title, subtitle)")
+        .select("status,is_favorite,rating,books(provider_book_id,authors,genres,moods,embedding,description,title,subtitle)")
         .eq("user_id", user_id)
         .execute().data
     )
 
-    shelved = {r["books"]["provider_book_id"] for r in shelf if r["status"] == "read" and r["books"]["embeddings"]}
+    shelved = {r["books"]["provider_book_id"] for r in shelf if r.get("books")}
     vecs, weights, liked = [], [], []
     for r in shelf:
-        b, w = r.get("book") or {}, _weight(r)
+        b, w = r.get("books") or {}, weight(r)
         if b.get("embedding") is not None and w > 0:
-            vecs.append(b.get("embeddings"))
+            vecs.append(_vec(b["embedding"]))
             weights.append(w)
             liked.append(b)
 
@@ -37,6 +40,9 @@ def get_recommendation(user_id: str, limit: int = 25) -> list[dict]:
             pid = str(b.id)
             if pid in seen or not b.description:
                 continue
+
+            seen.add(pid)
+            candidates.append(b)
 
     if not candidates:
         return BookSearchResult(hits=[])
